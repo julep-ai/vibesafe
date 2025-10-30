@@ -5,6 +5,7 @@ AST parsing utilities to extract spec components.
 import ast
 import doctest
 import inspect
+import textwrap
 from typing import Any, Callable
 
 
@@ -13,7 +14,8 @@ class SpecExtractor:
 
     def __init__(self, func: Callable[..., Any]):
         self.func = func
-        self.source = inspect.getsource(func)
+        # Dedent source to handle functions defined inside test methods
+        self.source = textwrap.dedent(inspect.getsource(func))
         self.tree = ast.parse(self.source)
 
     def extract_signature(self) -> str:

@@ -13,6 +13,21 @@ from defless import DeflessHandled, defless
 from defless.config import DeflessConfig
 
 
+# Tell pytest not to collect test_checkpoint and test_unit from defless.testing
+collect_ignore_glob = []
+
+
+def pytest_collection_modifyitems(items):
+    """Filter out test_checkpoint and test_unit functions from defless.testing module."""
+    filtered_items = []
+    for item in items:
+        # Skip if it's from src/defless/testing.py
+        if "src/defless/testing.py" in str(item.fspath):
+            continue
+        filtered_items.append(item)
+    items[:] = filtered_items
+
+
 @pytest.fixture
 def temp_dir(tmp_path: Path) -> Path:
     """Provide a temporary directory for tests."""
@@ -149,7 +164,7 @@ def checkpoint_dir(temp_dir: Path) -> Path:
 def sample_impl(checkpoint_dir: Path) -> Path:
     """Create a sample implementation file."""
     impl_code = """
-def add_numbers(a: int, b: int) -> int:
+def func(a: int, b: int) -> int:
     \"\"\"Add two numbers.\"\"\"
     return a + b
 """

@@ -179,13 +179,15 @@ class DeflessDecorator:
                 except Exception as e:
                     # Fall back to original function
                     result = func(*args, **kwargs)
+                    # Await if it's a coroutine
+                    if inspect.iscoroutine(result):
+                        result = await result
+                    # Check if result is DeflessHandled marker
                     if isinstance(result, DeflessHandled):
                         raise RuntimeError(
                             f"HTTP endpoint {unit_id} has not been compiled yet. "
                             f"Run 'defless compile --target {unit_id}' first."
                         ) from e
-                    if inspect.iscoroutine(result):
-                        return await result
                     return result
 
             return wrapper  # type: ignore

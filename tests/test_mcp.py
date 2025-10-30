@@ -65,8 +65,11 @@ class TestMCPServer:
         """Test handling request that raises error."""
         server = MCPServer()
 
-        # Mock scan to raise error
-        mocker.patch.object(server, "scan", side_effect=RuntimeError("Test error"))
+        # Mock scan method in the methods dictionary to raise error
+        def raise_error(params):
+            raise RuntimeError("Test error")
+
+        server.methods["scan"] = raise_error
 
         request = {"jsonrpc": "2.0", "method": "scan", "params": {}, "id": 1}
         response = server.handle_request(request)

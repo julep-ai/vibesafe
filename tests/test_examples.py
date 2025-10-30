@@ -125,12 +125,9 @@ class TestAPIExamples:
 class TestExampleRegistry:
     """Test that examples are registered correctly."""
 
-    def test_all_examples_registered(self, clear_defless_registry):
+    def test_all_examples_registered(self):
         """Test that all example functions are registered."""
-        # Import all examples
-        import examples.api.routes  # noqa: F401
-        import examples.math.ops  # noqa: F401
-
+        # Examples are imported at module level, so they should be registered
         from defless.core import defless
 
         registry = defless.get_registry()
@@ -144,11 +141,8 @@ class TestExampleRegistry:
         assert any("fibonacci" in uid for uid in unit_ids)
         assert any("is_prime" in uid for uid in unit_ids)
 
-    def test_example_types(self, clear_defless_registry):
+    def test_example_types(self):
         """Test example function types."""
-        import examples.api.routes  # noqa: F401
-        import examples.math.ops  # noqa: F401
-
         from defless.core import defless
 
         registry = defless.get_registry()

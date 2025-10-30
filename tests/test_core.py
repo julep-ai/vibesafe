@@ -172,7 +172,8 @@ class TestDeflessDecorator:
 
         assert unit_meta is not None
         assert unit_meta["type"] == "function"
-        assert unit_meta["qualname"] == "specific_func"
+        # qualname includes full path for nested functions
+        assert unit_meta["qualname"].endswith("specific_func")
 
     def test_get_unit_nonexistent(self, clear_defless_registry):
         """Test get_unit returns None for nonexistent unit."""

@@ -123,7 +123,7 @@ def normalize_docstring(docstring: str) -> str:
     """
     if not docstring:
         return ""
-    return inspect.cleandoc(docstring)
+    return inspect.cleandoc(docstring).strip()
 
 
 def short_hash(full_hash: str, length: int = 8) -> str:
