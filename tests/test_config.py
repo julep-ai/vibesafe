@@ -1,13 +1,13 @@
 """
-Tests for defless.config module.
+Tests for vibesafe.config module.
 """
 
 from pathlib import Path
 
 import pytest
 
-from defless.config import (
-    DeflessConfig,
+from vibesafe.config import (
+    VibesafeConfig,
     PathsConfig,
     ProjectConfig,
     PromptsConfig,
@@ -51,9 +51,9 @@ class TestPathsConfig:
     def test_default_paths(self):
         """Test default path configuration."""
         config = PathsConfig()
-        assert config.checkpoints == ".defless/checkpoints"
-        assert config.cache == ".defless/cache"
-        assert config.index == ".defless/index.toml"
+        assert config.checkpoints == ".vibesafe/checkpoints"
+        assert config.cache == ".vibesafe/cache"
+        assert config.index == ".vibesafe/index.toml"
         assert config.generated == "__generated__"
 
     def test_custom_paths(self):
@@ -111,61 +111,61 @@ class TestSandboxConfig:
         assert config.memory_mb == 512
 
 
-class TestDeflessConfig:
-    """Tests for DeflessConfig."""
+class TestVibesafeConfig:
+    """Tests for VibesafeConfig."""
 
     def test_default_config(self):
         """Test default configuration."""
-        config = DeflessConfig()
+        config = VibesafeConfig()
         assert config.project.env == "dev"
         assert "default" in config.provider
-        assert config.paths.checkpoints == ".defless/checkpoints"
+        assert config.paths.checkpoints == ".vibesafe/checkpoints"
 
     def test_load_from_file(self, config_file: Path):
         """Test loading configuration from file."""
-        config = DeflessConfig.load(config_file)
+        config = VibesafeConfig.load(config_file)
         assert config.project.python == ">=3.12"
         assert config.provider["default"].model == "gpt-4o-mini"
-        assert config.paths.checkpoints == ".defless/checkpoints"
+        assert config.paths.checkpoints == ".vibesafe/checkpoints"
 
     def test_load_nonexistent_file_returns_default(self, temp_dir: Path):
         """Test loading nonexistent file returns default config."""
         nonexistent = temp_dir / "nonexistent.toml"
-        config = DeflessConfig.load(nonexistent)
+        config = VibesafeConfig.load(nonexistent)
         assert config.project.env == "dev"
 
-    def test_get_provider_default(self, test_config: DeflessConfig):
+    def test_get_provider_default(self, test_config: VibesafeConfig):
         """Test getting default provider."""
         provider = test_config.get_provider()
         assert provider.model == "gpt-4o-mini"
         assert provider.kind == "openai-compatible"
 
-    def test_get_provider_by_name(self, test_config: DeflessConfig):
+    def test_get_provider_by_name(self, test_config: VibesafeConfig):
         """Test getting provider by name falls back to default."""
         provider = test_config.get_provider("nonexistent")
         assert provider.model == "gpt-4o-mini"
 
-    def test_get_api_key(self, test_config: DeflessConfig, monkeypatch: pytest.MonkeyPatch):
+    def test_get_api_key(self, test_config: VibesafeConfig, monkeypatch: pytest.MonkeyPatch):
         """Test getting API key from environment."""
         monkeypatch.setenv("TEST_API_KEY", "test-key-123")
         api_key = test_config.get_api_key()
         assert api_key == "test-key-123"
 
     def test_get_api_key_missing_raises(
-        self, test_config: DeflessConfig, monkeypatch: pytest.MonkeyPatch
+        self, test_config: VibesafeConfig, monkeypatch: pytest.MonkeyPatch
     ):
         """Test missing API key raises ValueError."""
         monkeypatch.delenv("TEST_API_KEY", raising=False)
         with pytest.raises(ValueError, match="API key not found"):
             test_config.get_api_key()
 
-    def test_resolve_path_absolute(self, test_config: DeflessConfig):
+    def test_resolve_path_absolute(self, test_config: VibesafeConfig):
         """Test resolving absolute path."""
         abs_path = Path("/absolute/path")
         resolved = test_config.resolve_path(str(abs_path))
         assert resolved == abs_path
 
-    def test_resolve_path_relative(self, test_config: DeflessConfig):
+    def test_resolve_path_relative(self, test_config: VibesafeConfig):
         """Test resolving relative path."""
         rel_path = "relative/path"
         resolved = test_config.resolve_path(rel_path)
@@ -174,29 +174,29 @@ class TestDeflessConfig:
 
     def test_find_config_current_dir(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch):
         """Test finding config in current directory."""
-        config_path = temp_dir / "defless.toml"
+        config_path = temp_dir / "vibesafe.toml"
         config_path.write_text("[project]\npython = '>=3.12'\n")
         monkeypatch.chdir(temp_dir)
 
-        found = DeflessConfig._find_config()
+        found = VibesafeConfig._find_config()
         assert found == config_path
 
     def test_find_config_parent_dir(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch):
         """Test finding config in parent directory."""
-        config_path = temp_dir / "defless.toml"
+        config_path = temp_dir / "vibesafe.toml"
         config_path.write_text("[project]\npython = '>=3.12'\n")
 
         subdir = temp_dir / "subdir"
         subdir.mkdir()
         monkeypatch.chdir(subdir)
 
-        found = DeflessConfig._find_config()
+        found = VibesafeConfig._find_config()
         assert found == config_path
 
     def test_find_config_not_found(self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch):
         """Test find_config returns None when not found."""
         monkeypatch.chdir(temp_dir)
-        found = DeflessConfig._find_config()
+        found = VibesafeConfig._find_config()
         assert found is None
 
     def test_load_with_multiple_providers(self, temp_dir: Path):
@@ -215,10 +215,10 @@ kind = "anthropic"
 model = "claude-3-sonnet"
 api_key_env = "ANTHROPIC_API_KEY"
 """
-        config_path = temp_dir / "defless.toml"
+        config_path = temp_dir / "vibesafe.toml"
         config_path.write_text(config_content)
 
-        config = DeflessConfig.load(config_path)
+        config = VibesafeConfig.load(config_path)
         assert "default" in config.provider
         assert "anthropic" in config.provider
         assert config.provider["anthropic"].model == "claude-3-sonnet"

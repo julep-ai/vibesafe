@@ -1,27 +1,27 @@
 """
-Integration tests for defless end-to-end workflows.
+Integration tests for vibesafe end-to-end workflows.
 """
 
 import pytest
 
-from defless import DeflessHandled, defless
+from vibesafe import VibesafeHandled, vibesafe
 
 
 @pytest.mark.integration
 class TestEndToEndWorkflow:
-    """Integration tests for complete defless workflow."""
+    """Integration tests for complete vibesafe workflow."""
 
     def test_complete_function_workflow(
         self, test_config, temp_dir, monkeypatch, clear_defless_registry, mocker
     ):
         """Test complete workflow: define -> compile -> test -> load."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
         # Step 1: Define a function
-        @defless.func
+        @vibesafe.func
         def multiply(a: int, b: int) -> int:
             """
             Multiply two numbers.
@@ -31,9 +31,9 @@ class TestEndToEndWorkflow:
             >>> multiply(5, 2)
             10
             """
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
-        unit_id = multiply.__defless_unit_id__
+        unit_id = multiply.__vibesafe_unit_id__
 
         # Mock LLM provider
         mock_provider = mocker.MagicMock()
@@ -44,9 +44,9 @@ def multiply(a: int, b: int) -> int:
 """
 
         # Step 2: Generate code
-        from defless.codegen import CodeGenerator
+        from vibesafe.codegen import CodeGenerator
 
-        unit_meta = defless.get_unit(unit_id)
+        unit_meta = vibesafe.get_unit(unit_id)
         generator = CodeGenerator(unit_id, unit_meta)
         generator.provider = mock_provider
 
@@ -54,18 +54,18 @@ def multiply(a: int, b: int) -> int:
         assert checkpoint_info["impl_path"].exists()
 
         # Step 3: Update index
-        from defless.runtime import update_index
+        from vibesafe.runtime import update_index
 
         update_index(unit_id, checkpoint_info["spec_hash"])
 
         # Step 4: Test implementation
-        from defless.testing import test_unit
+        from vibesafe.testing import test_unit
 
         result = test_unit(unit_id)
         assert result.passed
 
         # Step 5: Load and use
-        from defless.runtime import load_active
+        from vibesafe.runtime import load_active
 
         impl = load_active(unit_id, verify_hash=False)
         assert impl(3, 4) == 12
@@ -77,12 +77,12 @@ def multiply(a: int, b: int) -> int:
     ):
         """Test HTTP endpoint workflow."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
         # Define endpoint
-        @defless.http(method="POST", path="/double")
+        @vibesafe.http(method="POST", path="/double")
         async def double_endpoint(value: int) -> dict[str, int]:
             """
             Double a number.
@@ -91,10 +91,10 @@ def multiply(a: int, b: int) -> int:
             >>> anyio.run(double_endpoint, 5)
             {'result': 10}
             """
-            return DeflessHandled()
+            return VibesafeHandled()
 
-        unit_id = double_endpoint.__defless_unit_id__
-        assert defless.get_unit(unit_id)["type"] == "http"
+        unit_id = double_endpoint.__vibesafe_unit_id__
+        assert vibesafe.get_unit(unit_id)["type"] == "http"
 
     @pytest.mark.integration
     def test_multiple_functions_workflow(
@@ -102,27 +102,27 @@ def multiply(a: int, b: int) -> int:
     ):
         """Test workflow with multiple functions."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
         # Define multiple functions
-        @defless.func
+        @vibesafe.func
         def func_a(x: int) -> int:
             """Function A."""
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
-        @defless.func
+        @vibesafe.func
         def func_b(x: str) -> str:
             """Function B."""
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
-        @defless.func
+        @vibesafe.func
         def func_c(x: float) -> float:
             """Function C."""
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
-        registry = defless.get_registry()
+        registry = vibesafe.get_registry()
         assert len([u for u in registry if "func_a" in u or "func_b" in u or "func_c" in u]) >= 3
 
     @pytest.mark.integration
@@ -144,16 +144,16 @@ kind = "openai-compatible"
 model = "custom-model"
 api_key_env = "CUSTOM_API_KEY"
 """
-        config_path = temp_dir / "defless.toml"
+        config_path = temp_dir / "vibesafe.toml"
         config_path.write_text(config_content)
 
         monkeypatch.chdir(temp_dir)
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.setenv("CUSTOM_API_KEY", "custom-key")
 
-        from defless.config import DeflessConfig
+        from vibesafe.config import VibesafeConfig
 
-        config = DeflessConfig.load()
+        config = VibesafeConfig.load()
         assert config.provider["default"].model == "gpt-4"
         assert config.provider["custom"].model == "custom-model"
 
@@ -161,7 +161,7 @@ api_key_env = "CUSTOM_API_KEY"
     def test_spec_extraction_workflow(self, clear_defless_registry):
         """Test spec extraction from decorated function."""
 
-        @defless.func
+        @vibesafe.func
         def example_func(a: int, b: int, c: str = "default") -> str:
             """
             Example function with parameters.
@@ -172,9 +172,9 @@ api_key_env = "CUSTOM_API_KEY"
             'result'
             """
             result = a + b
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
-        from defless.ast_parser import extract_spec
+        from vibesafe.ast_parser import extract_spec
 
         spec = extract_spec(example_func)
 
@@ -186,7 +186,7 @@ api_key_env = "CUSTOM_API_KEY"
     @pytest.mark.integration
     def test_hash_computation_workflow(self):
         """Test hash computation for spec and checkpoint."""
-        from defless.hashing import (
+        from vibesafe.hashing import (
             compute_checkpoint_hash,
             compute_prompt_hash,
             compute_spec_hash,
@@ -219,11 +219,11 @@ api_key_env = "CUSTOM_API_KEY"
     def test_shim_generation_workflow(self, test_config, temp_dir, monkeypatch):
         """Test shim generation and writing."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
-        from defless.runtime import build_shim, write_shim
+        from vibesafe.runtime import build_shim, write_shim
 
         # Build shim
         shim_code = build_shim("app.math.ops/add_func")
@@ -239,11 +239,11 @@ api_key_env = "CUSTOM_API_KEY"
     def test_index_management_workflow(self, test_config, temp_dir, monkeypatch):
         """Test index creation and updates."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
-        from defless.runtime import update_index
+        from vibesafe.runtime import update_index
 
         # Update multiple units
         update_index("unit1/func1", "hash1")
@@ -251,7 +251,7 @@ api_key_env = "CUSTOM_API_KEY"
         update_index("unit3/func3", "hash3")
 
         # Verify index
-        index_path = temp_dir / ".defless" / "index.toml"
+        index_path = temp_dir / ".vibesafe" / "index.toml"
         assert index_path.exists()
 
         content = index_path.read_text()
@@ -280,11 +280,11 @@ class TestErrorHandling:
     def test_checkpoint_not_found_error(self, test_config, temp_dir, monkeypatch):
         """Test error when checkpoint not found."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
-        from defless.runtime import CheckpointNotFoundError, load_active
+        from vibesafe.runtime import CheckpointNotFoundError, load_active
 
         with pytest.raises(CheckpointNotFoundError):
             load_active("nonexistent/unit")
@@ -292,10 +292,10 @@ class TestErrorHandling:
     def test_uncompiled_function_error(self, clear_defless_registry):
         """Test error when calling uncompiled function."""
 
-        @defless.func
+        @vibesafe.func
         def uncompiled(x: int) -> int:
             """Not compiled."""
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
         with pytest.raises(RuntimeError, match="has not been compiled yet"):
             uncompiled(5)

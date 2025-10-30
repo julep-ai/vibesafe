@@ -310,4 +310,4 @@ def temp_templates(tmp_path):
 
 ## License
 
-These workflows are part of the Defless project and follow the same license terms.
+These workflows are part of the Vibesafe project and follow the same license terms.

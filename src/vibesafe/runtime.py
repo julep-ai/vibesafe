@@ -13,7 +13,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from defless.config import get_config
+from vibesafe.config import get_config
 
 
 class CheckpointNotFoundError(Exception):
@@ -81,7 +81,7 @@ def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
 
     # Load module
     spec = importlib.util.spec_from_file_location(
-        f"defless._generated.{unit_id.replace('/', '.')}", impl_path
+        f"vibesafe._generated.{unit_id.replace('/', '.')}", impl_path
     )
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not load spec from {impl_path}")
@@ -108,7 +108,7 @@ def _verify_checkpoint_hash(checkpoint_dir: Path, impl_path: Path) -> None:
     Raises:
         HashMismatchError: If hashes don't match
     """
-    from defless.hashing import compute_checkpoint_hash
+    from vibesafe.hashing import compute_checkpoint_hash
 
     # Load metadata
     meta_path = checkpoint_dir / "meta.toml"
@@ -143,11 +143,11 @@ def build_shim(unit_id: str) -> str:
     """
     func_name = unit_id.split("/")[-1]
 
-    return f'''# AUTO-GENERATED SHIM BY DEFLESS
+    return f'''# AUTO-GENERATED SHIM BY VIBESAFE
 # Unit: {unit_id}
 # This file imports the active checkpoint implementation.
 
-from defless.runtime import load_active
+from vibesafe.runtime import load_active
 
 {func_name} = load_active("{unit_id}")
 '''
@@ -214,7 +214,7 @@ def update_index(unit_id: str, active_hash: str) -> None:
 
     # Write TOML (manually since tomli doesn't have dump)
     with open(index_path, "w") as f:
-        f.write("# Defless checkpoint index\n")
+        f.write("# Vibesafe checkpoint index\n")
         f.write("# Maps unit IDs to active checkpoint hashes\n\n")
         for uid, data in sorted(index.items()):
             f.write(f'["{uid}"]\n')

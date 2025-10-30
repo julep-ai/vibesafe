@@ -1,5 +1,5 @@
 """
-Core decorators and sentinel types for defless.
+Core decorators and sentinel types for vibesafe.
 """
 
 import functools
@@ -11,22 +11,22 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
-class DeflessHandled:
+class VibesafeHandled:
     """
     Sentinel type marking where the spec ends and AI-generated code should begin.
 
     Usage:
-        @defless.func
+        @vibesafe.func
         def my_func(x: int) -> int:
             '''Add 1 to x'''
-            yield DeflessHandled()
+            yield VibesafeHandled()
     """
 
     def __repr__(self) -> str:
-        return "DeflessHandled()"
+        return "VibesafeHandled()"
 
 
-class DeflessDecorator:
+class VibesafeDecorator:
     """
     Main decorator class for marking functions and endpoints for code generation.
     """
@@ -50,7 +50,7 @@ class DeflessDecorator:
             template: Override template path
 
         Example:
-            @defless.func
+            @vibesafe.func
             def sum_str(a: str, b: str) -> str:
                 '''Add two ints represented as strings.
 
@@ -58,7 +58,7 @@ class DeflessDecorator:
                 '5'
                 '''
                 a, b = int(a), int(b)
-                yield DeflessHandled()
+                yield VibesafeHandled()
         """
 
         def decorator(func: Callable[P, R]) -> Callable[P, R]:
@@ -78,30 +78,30 @@ class DeflessDecorator:
             }
 
             # Mark the function
-            func.__defless_unit_id__ = unit_id  # type: ignore
-            func.__defless_type__ = "function"  # type: ignore
-            func.__defless_provider__ = provider  # type: ignore
-            func.__defless_template__ = template or "function.j2"  # type: ignore
+            func.__vibesafe_unit_id__ = unit_id  # type: ignore
+            func.__vibesafe_type__ = "function"  # type: ignore
+            func.__vibesafe_provider__ = provider  # type: ignore
+            func.__vibesafe_template__ = template or "function.j2"  # type: ignore
 
             @functools.wraps(func)
             def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
                 # Import here to avoid circular dependency
-                from defless.runtime import load_active
+                from vibesafe.runtime import load_active
 
                 # Try to load generated implementation
                 try:
                     impl = load_active(unit_id)
                     return impl(*args, **kwargs)
                 except Exception as e:
-                    # Fall back to original function (which should yield DeflessHandled)
+                    # Fall back to original function (which should yield VibesafeHandled)
                     result = func(*args, **kwargs)
-                    # Check if it's a generator that yielded DeflessHandled
+                    # Check if it's a generator that yielded VibesafeHandled
                     if inspect.isgenerator(result):
                         for item in result:
-                            if isinstance(item, DeflessHandled):
+                            if isinstance(item, VibesafeHandled):
                                 raise RuntimeError(
                                     f"Function {unit_id} has not been compiled yet. "
-                                    f"Run 'defless compile --target {unit_id}' first."
+                                    f"Run 'vibesafe compile --target {unit_id}' first."
                                 ) from e
                     return result
 
@@ -129,7 +129,7 @@ class DeflessDecorator:
             template: Override template path
 
         Example:
-            @defless.http(method="POST", path="/sum")
+            @vibesafe.http(method="POST", path="/sum")
             async def sum_endpoint(a: int, b: int) -> dict[str, int]:
                 '''Returns {"sum": a+b}
 
@@ -137,7 +137,7 @@ class DeflessDecorator:
                 >>> anyio.run(lambda: sum_endpoint(2, 3))
                 {'sum': 5}
                 '''
-                return DeflessHandled()
+                return VibesafeHandled()
         """
 
         def decorator(func: Callable[P, R]) -> Callable[P, R]:
@@ -159,17 +159,17 @@ class DeflessDecorator:
             }
 
             # Mark the function
-            func.__defless_unit_id__ = unit_id  # type: ignore
-            func.__defless_type__ = "http"  # type: ignore
-            func.__defless_method__ = method  # type: ignore
-            func.__defless_path__ = path  # type: ignore
-            func.__defless_provider__ = provider  # type: ignore
-            func.__defless_template__ = template or "http_endpoint.j2"  # type: ignore
+            func.__vibesafe_unit_id__ = unit_id  # type: ignore
+            func.__vibesafe_type__ = "http"  # type: ignore
+            func.__vibesafe_method__ = method  # type: ignore
+            func.__vibesafe_path__ = path  # type: ignore
+            func.__vibesafe_provider__ = provider  # type: ignore
+            func.__vibesafe_template__ = template or "http_endpoint.j2"  # type: ignore
 
             @functools.wraps(func)
             async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
                 # Import here to avoid circular dependency
-                from defless.runtime import load_active
+                from vibesafe.runtime import load_active
 
                 # Try to load generated implementation
                 try:
@@ -183,11 +183,11 @@ class DeflessDecorator:
                     # Await if it's a coroutine
                     if inspect.iscoroutine(result):
                         result = await result
-                    # Check if result is DeflessHandled marker
-                    if isinstance(result, DeflessHandled):
+                    # Check if result is VibesafeHandled marker
+                    if isinstance(result, VibesafeHandled):
                         raise RuntimeError(
                             f"HTTP endpoint {unit_id} has not been compiled yet. "
-                            f"Run 'defless compile --target {unit_id}' first."
+                            f"Run 'vibesafe compile --target {unit_id}' first."
                         ) from e
                     return result
 
@@ -196,7 +196,7 @@ class DeflessDecorator:
         return decorator
 
     def get_registry(self) -> dict[str, dict[str, Any]]:
-        """Get all registered defless units."""
+        """Get all registered vibesafe units."""
         return self._registry.copy()
 
     def get_unit(self, unit_id: str) -> dict[str, Any] | None:
@@ -205,4 +205,4 @@ class DeflessDecorator:
 
 
 # Global instance
-defless = DeflessDecorator()
+vibesafe = VibesafeDecorator()

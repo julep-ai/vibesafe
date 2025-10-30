@@ -1,5 +1,5 @@
 """
-Configuration loader for defless.toml.
+Configuration loader for vibesafe.toml.
 """
 
 import os
@@ -30,9 +30,9 @@ class ProviderConfig(BaseModel):
 class PathsConfig(BaseModel):
     """Path configuration."""
 
-    checkpoints: str = ".defless/checkpoints"
-    cache: str = ".defless/cache"
-    index: str = ".defless/index.toml"
+    checkpoints: str = ".vibesafe/checkpoints"
+    cache: str = ".vibesafe/cache"
+    index: str = ".vibesafe/index.toml"
     generated: str = "__generated__"
 
 
@@ -58,7 +58,7 @@ class SandboxConfig(BaseModel):
     memory_mb: int = 256
 
 
-class DeflessConfig(BaseModel):
+class VibesafeConfig(BaseModel):
     """Root configuration object."""
 
     project: ProjectConfig = Field(default_factory=ProjectConfig)
@@ -70,15 +70,15 @@ class DeflessConfig(BaseModel):
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
     @classmethod
-    def load(cls, config_path: Path | None = None) -> "DeflessConfig":
+    def load(cls, config_path: Path | None = None) -> "VibesafeConfig":
         """
-        Load configuration from defless.toml.
+        Load configuration from vibesafe.toml.
 
         Args:
-            config_path: Path to defless.toml, or None to search upwards
+            config_path: Path to vibesafe.toml, or None to search upwards
 
         Returns:
-            DeflessConfig instance
+            VibesafeConfig instance
         """
         if config_path is None:
             config_path = cls._find_config()
@@ -109,14 +109,14 @@ class DeflessConfig(BaseModel):
     @staticmethod
     def _find_config() -> Path | None:
         """
-        Search for defless.toml starting from current directory upwards.
+        Search for vibesafe.toml starting from current directory upwards.
 
         Returns:
-            Path to defless.toml or None if not found
+            Path to vibesafe.toml or None if not found
         """
         current = Path.cwd()
         while True:
-            config_path = current / "defless.toml"
+            config_path = current / "vibesafe.toml"
             if config_path.exists():
                 return config_path
 
@@ -174,10 +174,10 @@ class DeflessConfig(BaseModel):
 
 
 # Global config instance
-_config: DeflessConfig | None = None
+_config: VibesafeConfig | None = None
 
 
-def get_config(reload: bool = False) -> DeflessConfig:
+def get_config(reload: bool = False) -> VibesafeConfig:
     """
     Get global configuration instance.
 
@@ -185,9 +185,9 @@ def get_config(reload: bool = False) -> DeflessConfig:
         reload: Force reload from file
 
     Returns:
-        DeflessConfig instance
+        VibesafeConfig instance
     """
     global _config
     if _config is None or reload:
-        _config = DeflessConfig.load()
+        _config = VibesafeConfig.load()
     return _config

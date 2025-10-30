@@ -62,7 +62,7 @@ jobs:
       - name: Run mypy
         run: |
           source .venv/bin/activate
-          mypy src/defless/
+          mypy src/vibesafe/
 
   test:
     name: Test Suite
@@ -91,7 +91,7 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
-          pytest -n auto --cov=src/defless --cov-report=xml --cov-report=term
+          pytest -n auto --cov=src/vibesafe --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

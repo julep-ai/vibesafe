@@ -9,7 +9,7 @@ from typing import Protocol
 
 from openai import OpenAI
 
-from defless.config import ProviderConfig, get_config
+from vibesafe.config import ProviderConfig, get_config
 
 
 class Provider(Protocol):

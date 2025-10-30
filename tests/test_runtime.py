@@ -1,5 +1,5 @@
 """
-Tests for defless.runtime module.
+Tests for vibesafe.runtime module.
 """
 
 import sys
@@ -11,7 +11,7 @@ if sys.version_info >= (3, 11):
 else:
     pass
 
-from defless.runtime import (
+from vibesafe.runtime import (
     CheckpointNotFoundError,
     build_shim,
     load_active,
@@ -26,7 +26,7 @@ class TestLoadActive:
     def test_load_active_no_index_raises(self, test_config, temp_dir, monkeypatch):
         """Test loading without index raises error."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
@@ -35,12 +35,12 @@ class TestLoadActive:
 
     def test_load_active_no_unit_in_index_raises(self, test_config, temp_dir, monkeypatch):
         """Test loading unit not in index raises error."""
-        index_path = temp_dir / ".defless" / "index.toml"
+        index_path = temp_dir / ".vibesafe" / "index.toml"
         index_path.parent.mkdir(parents=True)
         index_path.write_text('["other/unit"]\nactive = "hash123"\n')
 
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
@@ -49,12 +49,12 @@ class TestLoadActive:
 
     def test_load_active_missing_checkpoint_dir_raises(self, test_config, temp_dir, monkeypatch):
         """Test loading with missing checkpoint directory raises error."""
-        index_path = temp_dir / ".defless" / "index.toml"
+        index_path = temp_dir / ".vibesafe" / "index.toml"
         index_path.parent.mkdir(parents=True)
         index_path.write_text('["test/unit"]\nactive = "abc123"\n')
 
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
@@ -66,18 +66,18 @@ class TestLoadActive:
     ):
         """Test successfully loading active checkpoint."""
         # Set up index
-        index_path = temp_dir / ".defless" / "index.toml"
+        index_path = temp_dir / ".vibesafe" / "index.toml"
         index_path.parent.mkdir(parents=True, exist_ok=True)
         index_path.write_text('["test/func"]\nactive = "abc123"\n')
 
         # Move checkpoint to correct location
-        dest_checkpoint = temp_dir / ".defless" / "checkpoints" / "test" / "func" / "abc123"
+        dest_checkpoint = temp_dir / ".vibesafe" / "checkpoints" / "test" / "func" / "abc123"
         dest_checkpoint.parent.mkdir(parents=True, exist_ok=True)
         sample_impl.rename(dest_checkpoint / "impl.py")
         sample_meta.rename(dest_checkpoint / "meta.toml")
 
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
@@ -110,7 +110,7 @@ class TestWriteShim:
     def test_write_shim_creates_file(self, test_config, temp_dir, monkeypatch):
         """Test that write_shim creates shim file."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
@@ -122,7 +122,7 @@ class TestWriteShim:
     def test_write_shim_creates_directories(self, test_config, temp_dir, monkeypatch):
         """Test that write_shim creates parent directories."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
@@ -132,7 +132,7 @@ class TestWriteShim:
     def test_write_shim_content(self, test_config, temp_dir, monkeypatch):
         """Test content of written shim file."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
@@ -148,13 +148,13 @@ class TestUpdateIndex:
     def test_update_index_creates_new(self, test_config, temp_dir, monkeypatch):
         """Test updating index creates new file if not exists."""
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
         update_index("test/unit", "abc123")
 
-        index_path = temp_dir / ".defless" / "index.toml"
+        index_path = temp_dir / ".vibesafe" / "index.toml"
         assert index_path.exists()
 
         content = index_path.read_text()
@@ -163,12 +163,12 @@ class TestUpdateIndex:
 
     def test_update_index_updates_existing(self, test_config, temp_dir, monkeypatch):
         """Test updating existing index entry."""
-        index_path = temp_dir / ".defless" / "index.toml"
+        index_path = temp_dir / ".vibesafe" / "index.toml"
         index_path.parent.mkdir(parents=True, exist_ok=True)
         index_path.write_text('["test/unit"]\nactive = "old_hash"\n')
 
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
@@ -180,7 +180,7 @@ class TestUpdateIndex:
 
     def test_update_index_preserves_other_units(self, test_config, temp_dir, monkeypatch):
         """Test updating one unit preserves others."""
-        index_path = temp_dir / ".defless" / "index.toml"
+        index_path = temp_dir / ".vibesafe" / "index.toml"
         index_path.parent.mkdir(parents=True, exist_ok=True)
         initial_content = """
 ["unit1/func"]
@@ -192,7 +192,7 @@ active = "hash2"
         index_path.write_text(initial_content)
 
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 

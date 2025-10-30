@@ -1,8 +1,8 @@
 """
-Tests for defless.hashing module.
+Tests for vibesafe.hashing module.
 """
 
-from defless.hashing import (
+from vibesafe.hashing import (
     compute_checkpoint_hash,
     compute_dependency_digest,
     compute_prompt_hash,

@@ -1,22 +1,22 @@
 """
-MCP (Model Context Protocol) server for defless.
+MCP (Model Context Protocol) server for vibesafe.
 
-Exposes defless CLI commands as JSON-RPC for editor integration.
+Exposes vibesafe CLI commands as JSON-RPC for editor integration.
 """
 
 import json
 import sys
 from typing import Any
 
-from defless import __version__
-from defless.codegen import generate_for_unit
-from defless.core import defless
-from defless.runtime import update_index, write_shim
-from defless.testing import run_all_tests, test_unit
+from vibesafe import __version__
+from vibesafe.codegen import generate_for_unit
+from vibesafe.core import vibesafe
+from vibesafe.runtime import update_index, write_shim
+from vibesafe.testing import run_all_tests, test_unit
 
 
 class MCPServer:
-    """Basic MCP server for defless commands."""
+    """Basic MCP server for vibesafe commands."""
 
     def __init__(self):
         self.methods = {
@@ -59,8 +59,8 @@ class MCPServer:
             }
 
     def scan(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Scan for defless units."""
-        registry = defless.get_registry()
+        """Scan for vibesafe units."""
+        registry = vibesafe.get_registry()
 
         units = []
         for unit_id, unit_meta in registry.items():
@@ -147,10 +147,10 @@ class MCPServer:
 
     def status(self, params: dict[str, Any]) -> dict[str, Any]:
         """Get overall status."""
-        from defless.config import get_config
+        from vibesafe.config import get_config
 
         config = get_config()
-        registry = defless.get_registry()
+        registry = vibesafe.get_registry()
 
         return {
             "version": __version__,

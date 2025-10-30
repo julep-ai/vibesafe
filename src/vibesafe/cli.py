@@ -1,5 +1,5 @@
 """
-CLI commands for defless.
+CLI commands for vibesafe.
 """
 
 import sys
@@ -9,12 +9,12 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from defless import __version__
-from defless.codegen import generate_for_unit
-from defless.config import get_config
-from defless.core import defless
-from defless.runtime import update_index, write_shim
-from defless.testing import run_all_tests, test_unit
+from vibesafe import __version__
+from vibesafe.codegen import generate_for_unit
+from vibesafe.config import get_config
+from vibesafe.core import vibesafe
+from vibesafe.runtime import update_index, write_shim
+from vibesafe.testing import run_all_tests, test_unit
 
 console = Console()
 
@@ -22,7 +22,7 @@ console = Console()
 @click.group()
 @click.version_option(version=__version__)
 def main() -> None:
-    """Defless - AI-powered code generation with verifiable specs."""
+    """Vibesafe - AI-powered code generation with verifiable specs."""
     pass
 
 
@@ -34,21 +34,21 @@ def main() -> None:
 )
 def scan(write_shims: bool) -> None:
     """
-    Scan project for defless-decorated functions.
+    Scan project for vibesafe-decorated functions.
 
     Lists all decorated defs with their completeness and status.
     """
     # Import all Python files to register decorators
     _import_project_modules()
 
-    registry = defless.get_registry()
+    registry = vibesafe.get_registry()
 
     if not registry:
-        console.print("[yellow]No defless units found in project.[/yellow]")
+        console.print("[yellow]No vibesafe units found in project.[/yellow]")
         return
 
     # Build table
-    table = Table(title="Defless Units")
+    table = Table(title="Vibesafe Units")
     table.add_column("Unit ID", style="cyan")
     table.add_column("Type", style="green")
     table.add_column("Doctests", justify="right")
@@ -72,7 +72,7 @@ def scan(write_shims: bool) -> None:
         unit_type = unit_meta.get("type", "function")
 
         # Count doctests
-        from defless.ast_parser import extract_spec
+        from vibesafe.ast_parser import extract_spec
 
         spec = extract_spec(unit_meta["func"])
         doctest_count = len(spec["doctests"])
@@ -97,15 +97,15 @@ def scan(write_shims: bool) -> None:
 @click.option("--force", is_flag=True, help="Force recompilation even if checkpoint exists")
 def compile(target: str | None, force: bool) -> None:
     """
-    Generate code for defless units.
+    Generate code for vibesafe units.
 
     Renders prompts, calls LLM, and writes checkpoints.
     """
     _import_project_modules()
 
-    registry = defless.get_registry()
+    registry = vibesafe.get_registry()
     if not registry:
-        console.print("[red]No defless units found.[/red]")
+        console.print("[red]No vibesafe units found.[/red]")
         sys.exit(1)
 
     # Filter units if target specified

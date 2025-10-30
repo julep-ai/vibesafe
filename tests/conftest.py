@@ -1,5 +1,5 @@
 """
-Shared pytest fixtures for defless tests.
+Shared pytest fixtures for vibesafe tests.
 """
 
 from collections.abc import Callable
@@ -8,19 +8,19 @@ from typing import Any
 
 import pytest
 
-from defless import DeflessHandled, defless
-from defless.config import DeflessConfig
+from vibesafe import VibesafeHandled, vibesafe
+from vibesafe.config import VibesafeConfig
 
-# Tell pytest not to collect test_checkpoint and test_unit from defless.testing
+# Tell pytest not to collect test_checkpoint and test_unit from vibesafe.testing
 collect_ignore_glob = []
 
 
 def pytest_collection_modifyitems(items):
-    """Filter out test_checkpoint and test_unit functions from defless.testing module."""
+    """Filter out test_checkpoint and test_unit functions from vibesafe.testing module."""
     filtered_items = []
     for item in items:
-        # Skip if it's from src/defless/testing.py
-        if "src/defless/testing.py" in str(item.fspath):
+        # Skip if it's from src/vibesafe/testing.py
+        if "src/vibesafe/testing.py" in str(item.fspath):
             continue
         filtered_items.append(item)
     items[:] = filtered_items
@@ -50,9 +50,9 @@ api_key_env = "TEST_API_KEY"
 timeout = 60
 
 [paths]
-checkpoints = ".defless/checkpoints"
-cache = ".defless/cache"
-index = ".defless/index.toml"
+checkpoints = ".vibesafe/checkpoints"
+cache = ".vibesafe/cache"
+index = ".vibesafe/index.toml"
 generated = "__generated__"
 
 [prompts]
@@ -64,24 +64,24 @@ enabled = false
 timeout = 10
 memory_mb = 256
 """
-    config_path = temp_dir / "defless.toml"
+    config_path = temp_dir / "vibesafe.toml"
     config_path.write_text(config_content)
     return config_path
 
 
 @pytest.fixture
-def test_config(config_file: Path, monkeypatch: pytest.MonkeyPatch) -> DeflessConfig:
+def test_config(config_file: Path, monkeypatch: pytest.MonkeyPatch) -> VibesafeConfig:
     """Load test configuration."""
     monkeypatch.chdir(config_file.parent)
     monkeypatch.setenv("TEST_API_KEY", "test-key-12345")
-    return DeflessConfig.load(config_file)
+    return VibesafeConfig.load(config_file)
 
 
 @pytest.fixture
 def sample_function() -> Callable[..., Any]:
     """Sample function for testing."""
 
-    @defless.func
+    @vibesafe.func
     def add_numbers(a: int, b: int) -> int:
         """
         Add two numbers.
@@ -91,7 +91,7 @@ def sample_function() -> Callable[..., Any]:
         >>> add_numbers(10, 20)
         30
         """
-        yield DeflessHandled()
+        yield VibesafeHandled()
 
     return add_numbers
 
@@ -100,7 +100,7 @@ def sample_function() -> Callable[..., Any]:
 def sample_async_function() -> Callable[..., Any]:
     """Sample async function for testing."""
 
-    @defless.http(method="POST", path="/test")
+    @vibesafe.http(method="POST", path="/test")
     async def test_endpoint(x: int) -> dict[str, int]:
         """
         Test endpoint.
@@ -109,7 +109,7 @@ def sample_async_function() -> Callable[..., Any]:
         >>> anyio.run(test_endpoint, 5)
         {'result': 5}
         """
-        return DeflessHandled()
+        return VibesafeHandled()
 
     return test_endpoint
 
@@ -153,7 +153,7 @@ def add_numbers(a: int, b: int) -> int:
 @pytest.fixture
 def checkpoint_dir(temp_dir: Path) -> Path:
     """Create a checkpoint directory structure."""
-    checkpoint = temp_dir / ".defless" / "checkpoints" / "test" / "func" / "abc123"
+    checkpoint = temp_dir / ".vibesafe" / "checkpoints" / "test" / "func" / "abc123"
     checkpoint.mkdir(parents=True, exist_ok=True)
     return checkpoint
 
@@ -178,7 +178,7 @@ def sample_meta(checkpoint_dir: Path) -> Path:
 spec_sha = "abc123def456"
 chk_sha = "def456ghi789"
 prompt_sha = "ghi789jkl012"
-defless_version = "0.1.0"
+vibesafe_version = "0.1.0"
 provider = "openai-compatible:gpt-4o-mini"
 template = "function.j2"
 
@@ -195,22 +195,22 @@ text = '''Add two numbers.'''
 
 @pytest.fixture
 def clear_defless_registry():
-    """Clear defless registry between tests."""
+    """Clear vibesafe registry between tests."""
     # Store original registry
-    original = defless._registry.copy()
-    defless._registry.clear()
+    original = vibesafe._registry.copy()
+    vibesafe._registry.clear()
 
     yield
 
     # Restore original registry
-    defless._registry.clear()
-    defless._registry.update(original)
+    vibesafe._registry.clear()
+    vibesafe._registry.update(original)
 
 
 @pytest.fixture(autouse=True)
 def reset_config():
     """Reset global config between tests."""
-    from defless import config
+    from vibesafe import config
 
     config._config = None
     yield

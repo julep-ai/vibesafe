@@ -1,1 +1,1 @@
-"""Tests for defless."""
+"""Tests for vibesafe."""

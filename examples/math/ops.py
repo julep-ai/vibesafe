@@ -1,11 +1,11 @@
 """
-Example defless functions for mathematical operations.
+Example vibesafe functions for mathematical operations.
 """
 
-from defless import DeflessHandled, defless
+from vibesafe import VibesafeHandled, vibesafe
 
 
-@defless.func
+@vibesafe.func
 def sum_str(a: str, b: str) -> str:
     """
     Add two integers represented as strings.
@@ -19,10 +19,10 @@ def sum_str(a: str, b: str) -> str:
     """
     # Convert to ints for the AI to understand the context
     a_int, b_int = int(a), int(b)
-    yield DeflessHandled()
+    yield VibesafeHandled()
 
 
-@defless.func
+@vibesafe.func
 def fibonacci(n: int) -> int:
     """
     Return the nth Fibonacci number (0-indexed).
@@ -38,10 +38,10 @@ def fibonacci(n: int) -> int:
     """
     if n < 0:
         raise ValueError("n must be non-negative")
-    yield DeflessHandled()
+    yield VibesafeHandled()
 
 
-@defless.func
+@vibesafe.func
 def is_prime(n: int) -> bool:
     """
     Check if a number is prime.
@@ -59,4 +59,4 @@ def is_prime(n: int) -> bool:
     """
     if n < 2:
         return False
-    yield DeflessHandled()
+    yield VibesafeHandled()

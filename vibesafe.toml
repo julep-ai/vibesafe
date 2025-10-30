@@ -1,4 +1,4 @@
-# Defless Configuration
+# Vibesafe Configuration
 
 [project]
 python = ">=3.12"
@@ -14,9 +14,9 @@ api_key_env = "OPENAI_API_KEY"
 timeout = 60
 
 [paths]
-checkpoints = ".defless/checkpoints"
-cache = ".defless/cache"
-index = ".defless/index.toml"
+checkpoints = ".vibesafe/checkpoints"
+cache = ".vibesafe/cache"
+index = ".vibesafe/index.toml"
 generated = "__generated__"
 
 [prompts]
