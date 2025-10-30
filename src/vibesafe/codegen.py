@@ -51,7 +51,12 @@ class CodeGenerator:
         self.func = unit_meta["func"]
         self.spec = extract_spec(self.func)
 
-    def generate(self, force: bool = False, allow_missing_doctest: bool = False) -> dict[str, Any]:
+    def generate(
+        self,
+        force: bool = False,
+        allow_missing_doctest: bool = False,
+        feedback: str | None = None,
+    ) -> dict[str, Any]:
         """
         Generate implementation for this unit.
 
@@ -77,6 +82,8 @@ class CodeGenerator:
 
         # Render prompt
         prompt = self._render_prompt()
+        if feedback:
+            prompt = f"{prompt}\n\n# Feedback from previous attempt\n{feedback}\n"
         prompt_hash = compute_prompt_hash(prompt)
 
         # Call LLM
@@ -297,7 +304,10 @@ class CodeGenerator:
 
 
 def generate_for_unit(
-    unit_id: str, force: bool = False, allow_missing_doctest: bool = False
+    unit_id: str,
+    force: bool = False,
+    allow_missing_doctest: bool = False,
+    feedback: str | None = None,
 ) -> dict[str, Any]:
     """
     Generate code for a specific unit.
@@ -316,4 +326,8 @@ def generate_for_unit(
         raise ValueError(f"Unit not found: {unit_id}")
 
     generator = CodeGenerator(unit_id, unit_meta)
-    return generator.generate(force=force, allow_missing_doctest=allow_missing_doctest)
+    return generator.generate(
+        force=force,
+        allow_missing_doctest=allow_missing_doctest,
+        feedback=feedback,
+    )

@@ -24,15 +24,28 @@ def _exec_properties(func) -> None:
             value()
 
 
+def _run_doctests(func) -> None:
+    if not DOCSTRING:
+        return
+    parser = doctest.DocTestParser()
+    examples = parser.get_examples(DOCSTRING)
+    if not examples:
+        return
+    test = doctest.DocTest(
+        examples=examples,
+        globs={FUNC_NAME: func},
+        name=UNIT_ID,
+        filename="<generated>",
+        lineno=0,
+        docstring=DOCSTRING,
+    )
+    runner = doctest.DocTestRunner(optionflags=doctest.ELLIPSIS)
+    failures, _ = runner.run(test, clear_globs=False)
+    if failures:
+        raise AssertionError(f"{failures} doctest(s) failed for {UNIT_ID}")
+
+
 def test_doctests() -> None:
     func = load_active(UNIT_ID)
-    if DOCSTRING:
-        globs = {FUNC_NAME: func}
-        doctest.run_docstring_examples(
-            func,
-            DOCSTRING,
-            name=UNIT_ID,
-            optionflags=doctest.ELLIPSIS,
-            globs=globs,
-        )
+    _run_doctests(func)
     _exec_properties(func)

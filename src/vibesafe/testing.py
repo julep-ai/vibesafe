@@ -3,11 +3,12 @@
 import doctest
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from vibesafe.ast_parser import extract_spec
 from vibesafe.config import get_config
@@ -65,43 +66,54 @@ def test_checkpoint(checkpoint_dir: Path, unit_meta: dict[str, Any]) -> TestResu
     unit_id = unit_meta["module"] + "/" + unit_meta["qualname"]
     _ensure_defless_harness(unit_id, unit_meta, spec)
 
-    needs_impl = bool(doctests) or bool(hypothesis_blocks)
-    impl_func = None
-    if needs_impl:
-        try:
-            impl_func = _load_impl_func(impl_path, unit_meta)
-        except Exception as e:
-            return TestResult(passed=False, errors=[f"Failed to load implementation: {e}"])
+    config = get_config()
+    sandbox_cfg = config.sandbox
 
-    doctest_result = TestResult(passed=True, total=0)
-    if doctests and impl_func is not None:
-        doctest_result = _run_doctests(impl_func, spec["docstring"], doctests)
-        if not doctest_result.passed:
-            return doctest_result
+    total_tests = 0
 
-    property_total = 0
-    if hypothesis_blocks and impl_func is not None:
-        property_total, property_errors = _run_hypothesis_tests(
-            unit_id, impl_func, hypothesis_blocks
-        )
-        if property_errors:
-            return TestResult(
-                passed=False,
-                failures=len(property_errors),
-                total=property_total,
-                errors=property_errors,
+    if sandbox_cfg.enabled:
+        sandbox_result = _run_sandbox_checks(unit_meta, spec, sandbox_cfg)
+        total_tests += sandbox_result.total
+        if not sandbox_result.passed:
+            return sandbox_result
+        impl_func = None
+    else:
+        impl_func = None
+        if doctests or hypothesis_blocks:
+            try:
+                impl_func = _load_impl_func(impl_path, unit_meta)
+            except Exception as e:
+                return TestResult(passed=False, errors=[f"Failed to load implementation: {e}"])
+
+        if doctests and impl_func is not None:
+            doctest_result = _run_doctests(impl_func, spec["docstring"], doctests)
+            total_tests += doctest_result.total
+            if not doctest_result.passed:
+                return doctest_result
+
+        if hypothesis_blocks and impl_func is not None:
+            property_total, property_errors = _run_hypothesis_inline(
+                unit_id, impl_func, hypothesis_blocks
             )
+            total_tests += property_total
+            if property_errors:
+                return TestResult(
+                    passed=False,
+                    failures=len(property_errors),
+                    total=total_tests,
+                    errors=property_errors,
+                )
 
     gate_errors = _run_quality_gates(impl_path)
     if gate_errors:
         return TestResult(
             passed=False,
             failures=len(gate_errors),
-            total=doctest_result.total + property_total,
+            total=total_tests,
             errors=gate_errors,
         )
 
-    return TestResult(passed=True, failures=0, total=doctest_result.total + property_total)
+    return TestResult(passed=True, failures=0, total=total_tests)
 
 
 def _load_impl_func(impl_path: Path, unit_meta: dict[str, Any]) -> Any:
@@ -250,17 +262,30 @@ def _ensure_defless_harness(
                     value()
 
 
+        def _run_doctests(func) -> None:
+            if not DOCSTRING:
+                return
+            parser = doctest.DocTestParser()
+            examples = parser.get_examples(DOCSTRING)
+            if not examples:
+                return
+            test = doctest.DocTest(
+                examples=examples,
+                globs={{FUNC_NAME: func}},
+                name=UNIT_ID,
+                filename="<generated>",
+                lineno=0,
+                docstring=DOCSTRING,
+            )
+            runner = doctest.DocTestRunner(optionflags=doctest.ELLIPSIS)
+            failures, _ = runner.run(test, clear_globs=False)
+            if failures:
+                raise AssertionError(f"{{failures}} doctest(s) failed for {{UNIT_ID}}")
+
+
         def test_doctests() -> None:
             func = load_active(UNIT_ID)
-            if DOCSTRING:
-                globs = {{FUNC_NAME: func}}
-                doctest.run_docstring_examples(
-                    func,
-                    DOCSTRING,
-                    name=UNIT_ID,
-                    optionflags=doctest.ELLIPSIS,
-                    globs=globs,
-                )
+            _run_doctests(func)
             _exec_properties(func)
         """
         ).strip()
@@ -274,8 +299,143 @@ def _ensure_defless_harness(
     return harness_path
 
 
-def _run_hypothesis_tests(unit_id: str, func: Any, blocks: list[str]) -> tuple[int, list[str]]:
-    """Execute hypothesis property blocks and return (count, errors)."""
+def _run_sandbox_checks(
+    unit_meta: dict[str, Any],
+    spec: dict[str, Any],
+    sandbox_cfg,
+) -> TestResult:
+    """Execute doctests/properties inside sandboxed subprocess."""
+
+    payload = {
+        "unit_id": unit_meta["module"] + "/" + unit_meta["qualname"],
+        "func_name": unit_meta["qualname"].split(".")[-1],
+        "docstring": spec.get("docstring", ""),
+        "properties": "\n\n".join(spec.get("hypothesis_blocks", [])),
+        "memory_limit": sandbox_cfg.memory_mb * 1024 * 1024 if sandbox_cfg.memory_mb else 0,
+    }
+
+    script = textwrap.dedent(
+        """
+        import doctest
+        import json
+        import os
+        import sys
+
+        try:
+            from vibesafe.runtime import load_active
+        except Exception as exc:  # pragma: no cover
+            print(json.dumps({"error": f"Failed to import runtime: {exc}"}))
+            sys.exit(2)
+
+        data = json.loads(os.environ["VIBESAFE_SANDBOX"])
+
+        memory_limit = data.get("memory_limit", 0)
+        if memory_limit:
+            try:  # pragma: no cover - platform dependent
+                import resource
+
+                resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
+            except Exception:
+                pass
+
+        result = {"failures": [], "total": 0}
+
+        try:
+            func = load_active(data["unit_id"])
+        except Exception as exc:
+            result["failures"].append(f"Failed to load implementation: {exc}")
+            print(json.dumps(result))
+            sys.exit(1)
+
+        docstring = data.get("docstring", "")
+        if docstring:
+            parser = doctest.DocTestParser()
+            examples = parser.get_examples(docstring)
+            if examples:
+                dt = doctest.DocTest(
+                    examples=examples,
+                    globs={data["func_name"]: func},
+                    name=data["unit_id"],
+                    filename="<sandbox>",
+                    lineno=0,
+                    docstring=docstring,
+                )
+                runner = doctest.DocTestRunner(optionflags=doctest.ELLIPSIS)
+                failures, total = runner.run(dt, clear_globs=False)
+                result["total"] += total
+                if failures:
+                    result["failures"].append(f"{failures} doctest(s) failed")
+
+        prop_src = data.get("properties", "")
+        if prop_src:
+            namespace = {
+                "load_active": load_active,
+                "UNIT_ID": data["unit_id"],
+                "FUNC_NAME": data["func_name"],
+                "func": func,
+            }
+            try:
+                exec(prop_src, namespace)
+                for value in list(namespace.values()):
+                    if callable(value) and hasattr(value, "hypothesis"):
+                        result["total"] += 1
+                        try:
+                            value()
+                        except Exception as exc:
+                            result["failures"].append(
+                                f"Hypothesis property {getattr(value, '__name__', '<property>')} failed: {exc}"
+                            )
+            except Exception as exc:
+                result["failures"].append(f"Hypothesis block execution failed: {exc}")
+
+        print(json.dumps(result))
+        sys.exit(0 if not result["failures"] else 1)
+        """
+    )
+
+    env = os.environ.copy()
+    env["VIBESAFE_SANDBOX"] = json.dumps(payload)
+
+    timeout = sandbox_cfg.timeout if sandbox_cfg.timeout else None
+
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return TestResult(passed=False, failures=1, total=0, errors=["Sandbox timed out"])
+
+    stdout = (completed.stdout or "").strip()
+    stderr = (completed.stderr or "").strip()
+
+    try:
+        data = json.loads(stdout or "{}")
+    except json.JSONDecodeError:
+        message = "Sandbox returned invalid output"
+        if stderr:
+            message += f": {stderr}"
+        return TestResult(passed=False, failures=1, total=0, errors=[message])
+
+    failures = data.get("failures", [])
+    total = data.get("total", 0)
+
+    if completed.returncode != 0:
+        return TestResult(
+            passed=False,
+            failures=len(failures) or 1,
+            total=total,
+            errors=failures or ([stderr] if stderr else ["Sandbox execution failed"]),
+        )
+
+    return TestResult(passed=True, failures=0, total=total)
+
+
+def _run_hypothesis_inline(unit_id: str, func: Any, blocks: list[str]) -> tuple[int, list[str]]:
+    """Execute hypothesis property blocks inline and return (count, errors)."""
 
     if not blocks:
         return 0, []
@@ -373,5 +533,5 @@ def run_all_tests() -> dict[str, TestResult]:
 
 
 # Prevent pytest from auto-collecting helper functions
-test_checkpoint.__test__ = False
-test_unit.__test__ = False
+cast(Any, test_checkpoint).__test__ = False
+cast(Any, test_unit).__test__ = False

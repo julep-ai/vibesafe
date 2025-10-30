@@ -119,6 +119,25 @@ async def calculate_endpoint(a: int, b: int, op: str) -> dict[str, int]:
 - `async def`: Must be async for endpoints
 - Return `VibesafeHandled()` (not yield)
 
+### FastAPI Integration
+
+```python
+from fastapi import FastAPI
+from vibesafe.fastapi import mount
+
+app = FastAPI()
+
+# Mount vibesafe health/version routes at /_vibesafe
+mount(app)
+
+# Your vibesafe-decorated endpoints are automatically available
+# Example: POST /calculate from @vibesafe.http(method="POST", path="/calculate")
+```
+
+**Mounted routes:**
+- `GET /_vibesafe/health` - Health check endpoint
+- `GET /_vibesafe/version` - Vibesafe version info
+
 ### Best Practices for Specs
 
 ✅ **DO:**
@@ -127,12 +146,50 @@ async def calculate_endpoint(a: int, b: int, op: str) -> dict[str, int]:
 - Add type hints for all parameters and returns
 - Include validation/setup code before `VibesafeHandled()`
 - Test edge cases (empty inputs, negatives, None, etc.)
+- Consider property-based tests for complex logic
 
 ❌ **DON'T:**
 - Write implementation - let AI generate it
 - Skip doctests - they're essential for verification
 - Use complex dependencies without documenting them
 - Mix spec logic with implementation
+
+### Property-Based Testing (Hypothesis)
+
+For complex functions, you can add Hypothesis property-based tests in your spec:
+
+```python
+from hypothesis import given, strategies as st
+
+@vibesafe.func
+def add(a: int, b: int) -> int:
+    """
+    Add two integers.
+
+    >>> add(2, 3)
+    5
+    >>> add(-1, 1)
+    0
+    """
+    yield VibesafeHandled()
+
+# Property-based test (optional)
+@given(a=st.integers(), b=st.integers())
+def test_add_commutative(a: int, b: int):
+    """Test that addition is commutative."""
+    assert add(a, b) == add(b, a)
+
+@given(a=st.integers())
+def test_add_identity(a: int):
+    """Test that adding zero is identity."""
+    assert add(a, 0) == a
+```
+
+**Hypothesis tests:**
+- Run during `vibesafe test`
+- Generate hundreds of test cases automatically
+- Find edge cases you might miss
+- Provide stronger verification than examples alone
 
 ## CLI Commands
 
@@ -172,10 +229,12 @@ vibesafe compile --force
 1. Extracts spec (signature, docstring, body)
 2. Computes spec hash
 3. Renders prompt from template
-4. Calls LLM with deterministic seed
-5. Saves generated code to checkpoint
-6. Updates index.toml
-7. Writes __generated__ shim
+4. Calls LLM with deterministic seed (with caching)
+5. Cleans generated code (strips markdown blocks)
+6. Validates implementation (checks function signature)
+7. Saves generated code to checkpoint
+8. Updates index.toml
+9. Writes __generated__ shim
 
 ### Test Generated Code
 
@@ -189,8 +248,9 @@ vibesafe test --target app.math.ops/fibonacci
 
 **Tests run:**
 - All doctest examples from spec
-- Type checking (if configured)
-- Linting (if configured)
+- Hypothesis property-based tests (if defined)
+- Quality gates: ruff linting and mypy type checking
+- Optional sandbox execution for isolation
 
 ### Save (Activate) Checkpoints
 
@@ -200,12 +260,73 @@ vibesafe save
 
 # Save specific unit
 vibesafe save --target app.math.ops/fibonacci
+
+# Save HTTP endpoints with dependency freezing
+vibesafe save --target app.api.routes/calculate --freeze-http-deps
 ```
 
 **Save means:**
 - Tests must pass
 - Checkpoint is marked as "active" in index
 - Ready for production use
+
+**Dependency Freezing (`--freeze-http-deps`):**
+- Captures runtime package versions for HTTP endpoints
+- Writes `requirements.vibesafe.txt` with pinned versions
+- Records dependencies in checkpoint `meta.toml` under `[deps]`
+- Ensures reproducible deployments
+
+### Status and Drift Detection
+
+```bash
+# Show registry state and drift
+vibesafe status
+
+# Compare current spec hash to active checkpoint
+vibesafe diff
+
+# Compare specific unit
+vibesafe diff --target app.math.ops/fibonacci
+```
+
+**Status shows:**
+- All registered units
+- Active checkpoint status
+- Spec drift warnings (when spec changed vs active checkpoint)
+
+**Diff shows:**
+- Current spec hash vs active checkpoint hash
+- Indicates if recompilation is needed
+
+### Full Verification
+
+```bash
+# Run complete verification pipeline
+vibesafe check
+
+# Check specific unit
+vibesafe check --target app.math.ops/fibonacci
+```
+
+**Check runs:**
+1. Ruff linting
+2. Mypy type checking
+3. All doctests
+4. Drift detection
+5. Reports any failures
+
+### Interactive REPL Mode
+
+```bash
+# Interactive compile/test loop for a unit
+vibesafe repl --target app.math.ops/fibonacci
+```
+
+**REPL mode:**
+- More permissive (allows missing doctests)
+- Quick iteration cycle
+- Immediate feedback on changes
+- Perfect for developing specs
 
 ## Using Generated Code
 
@@ -263,18 +384,24 @@ result = fibonacci(10)
 vim app/math/ops.py
 
 # 2. Scan to verify registration
-vibesafe scan
+vibesafe scan --write-shims
 
-# 3. Compile to generate code
+# 3. Check status before compilation
+vibesafe status
+
+# 4. Compile to generate code
 vibesafe compile --target app.math.ops/fibonacci
 
-# 4. Test the implementation
+# 5. Test the implementation
 vibesafe test --target app.math.ops/fibonacci
 
-# 5. If tests pass, save/activate
+# 6. If tests pass, save/activate
 vibesafe save --target app.math.ops/fibonacci
 
-# 6. Use in code
+# 7. Verify no drift
+vibesafe diff
+
+# 8. Use in code
 python -c "from app.math.ops import fibonacci; print(fibonacci(10))"
 ```
 
@@ -311,6 +438,58 @@ vibesafe save
 
 ## Understanding the System
 
+### Architecture & Core Modules
+
+Vibesafe is organized into specialized modules in `src/vibesafe/`:
+
+**Core System:**
+- **core.py** - `VibesafeDecorator` class and `@vibesafe.func`/`@vibesafe.http` decorators
+- **ast_parser.py** - `SpecExtractor` class for parsing function specs using Python AST
+- **codegen.py** - `CodeGenerator` pipeline for orchestrating code generation
+- **runtime.py** - Checkpoint loading (`load_active()`, `write_shim()`, `update_index()`)
+- **hashing.py** - Deterministic hashing for specs, checkpoints, and dependencies
+
+**Provider & Configuration:**
+- **providers.py** - LLM integration (`Provider` protocol, `OpenAICompatibleProvider`, `CachedProvider`)
+- **config.py** - Configuration management via `vibesafe.toml` (Pydantic models)
+
+**Testing & Validation:**
+- **testing.py** - Doctest verification, quality gates (ruff/mypy), and Hypothesis support
+- **exceptions.py** - Typed exceptions for better error handling
+
+**Interfaces:**
+- **cli.py** - Command-line interface (scan, compile, test, save, status, diff, check, repl)
+- **mcp.py** - Model Context Protocol server for editor integration (JSON-RPC over stdio)
+- **fastapi.py** - FastAPI helpers (`mount()` for health/version routes)
+
+**Key Mechanisms:**
+- **Hash-Locked Checkpoints** - Deterministic hashing ensures reproducibility
+- **LLM Response Caching** - Responses cached by spec hash + seed in `.vibesafe/cache/`
+- **Static Dependency Analysis** - Tracks names referenced in specs, includes in spec hash
+- **Quality Gates** - Automatic ruff linting and mypy type checking before save
+- **Markdown Stripping** - Auto-cleans LLM responses wrapped in code blocks
+
+### MCP Server (Editor Integration)
+
+Vibesafe includes a Model Context Protocol server for editor integration:
+
+```bash
+# Run MCP server (stdio mode)
+python -m vibesafe.mcp
+```
+
+**Available MCP methods:**
+- `scan` - List all decorated units
+- `compile` - Generate implementations
+- `test` - Run doctests
+- `save` - Activate checkpoints
+- `status` - Show registry state
+
+**Use with editors:**
+- VS Code extensions that support MCP
+- Emacs/Vim plugins with JSON-RPC support
+- Any editor with stdio-based plugin system
+
 ### Directory Structure
 
 ```
@@ -336,21 +515,47 @@ myproject/
 ### Hash-Based Verification
 
 **Spec Hash:** Deterministically computed from:
-- Function signature
-- Docstring
-- Pre-VibesafeHandled body
+- Function signature (name, parameters, return type)
+- Docstring (including all doctests)
+- Pre-VibesafeHandled body (setup code)
 - Vibesafe version
 - Template ID
-- Provider model
-- Dependencies
+- Provider model and parameters (temperature, seed)
+- Static dependency digest (names referenced in spec)
 
 **Checkpoint Hash:** Computed from:
 - Spec hash
-- Prompt hash
+- Prompt hash (rendered template)
 - Generated code
+
+**Dependency Digest:** Includes:
+- Source code of referenced functions/classes
+- File paths and hashes
+- Transitive dependencies
 
 **In dev mode:** Warns on mismatch, auto-regenerates
 **In prod mode:** Hard error on mismatch
+
+### Index Management
+
+The `.vibesafe/index.toml` file tracks active checkpoints:
+
+```toml
+[units."app.math.ops/fibonacci"]
+checkpoint_hash = "abc123..."
+spec_hash = "def456..."
+activated_at = "2025-01-15T10:30:00Z"
+
+[units."app.api.routes/calculate"]
+checkpoint_hash = "ghi789..."
+spec_hash = "jkl012..."
+activated_at = "2025-01-15T11:00:00Z"
+```
+
+**Index operations:**
+- `update_index()` - Updates mapping when saving checkpoints
+- `load_active(unit_id)` - Loads implementation from active checkpoint
+- Drift detection compares current spec_hash to index spec_hash
 
 ### Environment Modes
 
@@ -561,6 +766,60 @@ This means generated code was modified. Either:
 2. Fix the modification
 3. Switch to dev mode temporarily
 
+### Spec Drift Detected
+
+**Problem:** `vibesafe diff` shows drift (spec changed vs active checkpoint)
+
+**Root Cause:**
+- Modified docstring or doctests
+- Changed function signature
+- Updated pre-VibesafeHandled code
+- Changed template, provider, or vibesafe version
+
+**Solution:**
+```bash
+# Review what changed
+vibesafe diff --target module/func
+
+# Recompile with new spec
+vibesafe compile --target module/func --force
+
+# Test new implementation
+vibesafe test --target module/func
+
+# Activate if tests pass
+vibesafe save --target module/func
+```
+
+### Quality Gates Failing
+
+**Problem:** `vibesafe test` or `vibesafe save` fails on ruff/mypy checks
+
+**Solutions:**
+1. **Fix linting issues:**
+```bash
+# Run ruff manually to see issues
+ruff check src tests examples
+
+# Auto-fix where possible
+ruff check --fix src tests examples
+```
+
+2. **Fix type errors:**
+```bash
+# Run mypy manually
+mypy src/vibesafe
+
+# Add type hints or use type: ignore comments
+```
+
+3. **Configure quality gates in vibesafe.toml:**
+```toml
+[testing]
+run_ruff = true
+run_mypy = true
+```
+
 ## Best Practices
 
 ### Spec Writing
@@ -615,18 +874,32 @@ This means generated code was modified. Either:
 # Setup
 export OPENAI_API_KEY="key"
 
-# Workflow
+# Discovery & Status
 vibesafe scan                              # List units
-vibesafe compile --target module/func     # Generate
-vibesafe test --target module/func        # Test
-vibesafe save --target module/func        # Activate
+vibesafe scan --write-shims                # List + generate shims
+vibesafe status                            # Show registry state & drift
+vibesafe diff                              # Compare spec to active checkpoint
 
-# Flags
---force                                   # Force recompile
---write-shims                            # Generate __generated__
+# Compilation & Testing
+vibesafe compile --target module/func      # Generate code
+vibesafe compile --force                   # Force recompile
+vibesafe test --target module/func         # Run doctests + quality gates
+vibesafe check                             # Full verification pipeline
 
-# Import
-from __generated__.module import func    # Use generated code
+# Activation
+vibesafe save --target module/func         # Activate checkpoint
+vibesafe save --freeze-http-deps           # Save + freeze dependencies
+
+# Interactive Development
+vibesafe repl --target module/func         # Interactive compile/test loop
+
+# Editor Integration
+python -m vibesafe.mcp                     # Run MCP server (stdio)
+
+# Import Generated Code
+from __generated__.module import func      # Use generated code (shim)
+from vibesafe.runtime import load_active   # Load by unit ID (recommended)
+func = load_active("module/func")
 ```
 
 ## Tested Working Examples
@@ -831,42 +1104,237 @@ vibesafe test
 python demo.py
 ```
 
-## Recent Improvements
+## Current Status & Features
 
-### Markdown Code Block Stripping (Latest)
+### Phase 1 - MVP Complete ✅
 
-**What Changed:**
-- Added automatic stripping of markdown code blocks from AI-generated code
-- LLM responses wrapped in ` ```python...``` ` are now cleaned automatically
-- Prevents syntax errors in generated implementations
+**Implemented:**
+- ✅ Python 3.12+ support with full type hints
+- ✅ Pure functions via `@vibesafe.func`
+- ✅ HTTP endpoints via `@vibesafe.http` (FastAPI integration)
+- ✅ Doctest-based verification with quality gates (ruff/mypy)
+- ✅ Hash-locked checkpoints with drift detection
+- ✅ OpenAI-compatible providers with response caching
+- ✅ CLI: scan, compile, test, save, status, diff, check, repl
+- ✅ Dependency tracking and freezing (`--freeze-http-deps`)
+- ✅ Jinja2 prompt templates (customizable)
+- ✅ MCP server for editor integration
+- ✅ Automatic markdown code block stripping
+- ✅ Hypothesis property-based testing support
+- ✅ FastAPI health/version route mounting
+- ✅ Static dependency analysis and hashing
 
-**Implementation:**
-- New `_clean_generated_code()` method in `src/vibesafe/codegen.py`
-- Handles various markdown formats (```python, ```, with/without extra whitespace)
-- Preserves code with backticks in strings/docstrings
-
-**Test Coverage:**
-- Added comprehensive tests in `tests/test_codegen_markdown.py`
-- Tests markdown blocks, plain code, nested backticks, edge cases
-- All 7 markdown stripping tests pass
-
-**Impact:**
-- ✅ More reliable code generation
-- ✅ Works with various LLM response formats
-- ✅ Backward compatible (doesn't break existing functionality)
-- ✅ No manual cleanup needed after compilation
+**Key Improvements:**
+- **Markdown Stripping:** Auto-cleans LLM responses wrapped in code blocks
+- **Quality Gates:** Automatic ruff linting and mypy type checking
+- **Drift Detection:** `vibesafe diff` shows when specs change
+- **Full Verification:** `vibesafe check` runs complete pipeline
+- **Interactive REPL:** Fast iteration with `vibesafe repl`
+- **Dependency Freezing:** Reproducible deployments with pinned versions
+- **LLM Caching:** Responses cached by spec hash for faster recompilation
 
 ### Known Limitations
 
-1. **Scan Discovery:** Only scans `app/`, `src/`, and root-level `.py` files
-2. **Shim Generation:** May overwrite existing shims (stores one function at a time)
-3. **Dict Ordering:** Doctest dict comparisons require consistent ordering
+1. **Scan Discovery:** Only scans `app/`, `src/`, and root-level `.py` files (not `examples/`, `tests/`)
+2. **Shim Generation:** Overwrites existing shims (one function per file)
+3. **Dict Ordering:** Doctest dict comparisons require consistent ordering (Python 3.7+ guaranteed)
 4. **Stateful Functions:** Not recommended for functions with side effects
+5. **Sandbox Execution:** Basic support, needs enhancement for full isolation
+
+## Advanced Configuration
+
+### Sandbox Execution (Optional)
+
+```toml
+[sandbox]
+enabled = false      # Set to true for isolated execution
+timeout = 10         # Timeout in seconds
+memory_mb = 256      # Memory limit
+```
+
+**When to enable:**
+- Testing untrusted generated code
+- Isolating side effects
+- Resource-limited environments
+
+**Limitations:**
+- Basic implementation in current version
+- May affect performance
+- Not all system calls supported
+
+### Multiple Providers
+
+```toml
+[provider.default]
+kind = "openai-compatible"
+model = "gpt-4o-mini"
+temperature = 0.0
+seed = 42
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+
+[provider.claude]
+kind = "openai-compatible"
+model = "claude-3-5-sonnet-20241022"
+temperature = 0.0
+seed = 42
+base_url = "https://api.anthropic.com/v1"
+api_key_env = "ANTHROPIC_API_KEY"
+
+[provider.local]
+kind = "openai-compatible"
+model = "llama-3-70b"
+temperature = 0.0
+base_url = "http://localhost:8000/v1"
+api_key_env = "LOCAL_API_KEY"
+```
+
+**Use different providers per function:**
+```python
+@vibesafe.func(provider="claude")
+def complex_logic(x: int) -> int:
+    """Uses Claude for complex reasoning."""
+    yield VibesafeHandled()
+
+@vibesafe.func(provider="local")
+def simple_math(a: int, b: int) -> int:
+    """Uses local model for simple tasks."""
+    yield VibesafeHandled()
+```
+
+## Common Workflows
+
+### New Project Setup
+
+```bash
+# 1. Create project structure
+mkdir myproject && cd myproject
+mkdir -p src/myproject prompts
+
+# 2. Create vibesafe.toml
+cat > vibesafe.toml <<'EOF'
+[project]
+python = ">=3.12"
+env = "dev"
+
+[provider.default]
+kind = "openai-compatible"
+model = "gpt-4o-mini"
+temperature = 0.0
+seed = 42
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+
+[paths]
+checkpoints = ".vibesafe/checkpoints"
+cache = ".vibesafe/cache"
+index = ".vibesafe/index.toml"
+generated = "__generated__"
+EOF
+
+# 3. Set up git
+git init
+echo ".vibesafe/cache/" >> .gitignore
+echo "__generated__/" >> .gitignore
+
+# 4. Set API key
+export OPENAI_API_KEY="your-key"
+
+# 5. Install vibesafe
+uv pip install vibesafe
+
+# 6. Write your first spec
+# (create src/myproject/math.py with vibesafe decorators)
+
+# 7. Start developing
+vibesafe scan --write-shims
+vibesafe compile
+vibesafe test
+vibesafe save
+```
+
+### Production Deployment
+
+```bash
+# 1. Set production mode
+# Edit vibesafe.toml: env = "prod"
+
+# 2. Compile all units
+vibesafe compile
+
+# 3. Run full verification
+vibesafe check
+
+# 4. Freeze dependencies
+vibesafe save --freeze-http-deps
+
+# 5. Commit everything
+git add .vibesafe/checkpoints .vibesafe/index.toml requirements.vibesafe.txt
+git commit -m "Add vibesafe checkpoints for v1.0"
+
+# 6. Deploy
+# Include .vibesafe/checkpoints and .vibesafe/index.toml in deployment
+```
+
+### CI/CD Integration
+
+```yaml
+# .github/workflows/vibesafe.yml
+name: Vibesafe CI
+
+on: [push, pull_request]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install vibesafe
+
+      - name: Scan units
+        run: vibesafe scan
+
+      - name: Check for drift
+        run: vibesafe diff
+
+      - name: Run full verification
+        run: vibesafe check
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
 
 ## Resources
 
-- Repository: https://github.com/julep-ai/vibesafe
-- Examples: See `examples/` directory
-- Templates: See `prompts/` directory
-- Issue Tracker: Report bugs and request features on GitHub
-- Documentation: This skill file is the most comprehensive guide
+- **Repository:** https://github.com/julep-ai/vibesafe
+- **Examples:** See `examples/` directory in the repo
+- **Templates:** See `prompts/` directory for Jinja2 prompt templates
+- **Issue Tracker:** Report bugs and request features on GitHub
+- **Documentation:** This skill file is the most comprehensive guide
+
+## Skill Usage Guidelines
+
+✅ **Use this skill when:**
+- Writing or updating vibesafe spec functions
+- Generating implementations with vibesafe CLI
+- Testing and verifying generated code
+- Debugging vibesafe issues (compilation, testing, drift)
+- Setting up new vibesafe projects
+- Configuring providers, templates, or quality gates
+- Integrating vibesafe with FastAPI applications
+- Setting up CI/CD for vibesafe projects
+
+❌ **Don't use this skill for:**
+- Developing the vibesafe library itself (core features)
+- Modifying vibesafe source code (use development docs)
+- Non-Python languages (vibesafe is Python-only)
+- Projects without type hints (vibesafe requires them)
+- Real-time/stateful code (vibesafe is for deterministic functions)

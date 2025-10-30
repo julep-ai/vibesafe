@@ -87,7 +87,7 @@ def compute_prompt_hash(prompt: str) -> str:
     return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 
 
-def compute_dependency_digest(dependencies: dict[str, str]) -> str:
+def compute_dependency_digest(dependencies: dict[str, str | dict[str, str]]) -> str:
     """
     Compute digest of function dependencies.
 
@@ -102,7 +102,17 @@ def compute_dependency_digest(dependencies: dict[str, str]) -> str:
 
     # Sort by name for consistency
     sorted_deps = sorted(dependencies.items())
-    combined = "\n".join(f"{name}:\n{source}" for name, source in sorted_deps)
+    parts: list[str] = []
+    for name, value in sorted_deps:
+        if isinstance(value, dict):
+            source = value.get("source", "")
+            path = value.get("path", "")
+            file_hash = value.get("file_hash", "")
+            parts.append(f"{name}|{path}|{file_hash}\n{source}")
+        else:
+            parts.append(f"{name}\n{value}")
+
+    combined = "\n---\n".join(parts)
     return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
 

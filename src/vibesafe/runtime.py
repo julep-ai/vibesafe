@@ -20,7 +20,12 @@ from vibesafe.exceptions import (
 )
 
 
-def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
+def load_active(
+    unit_id: str,
+    verify_hash: bool = True,
+    *,
+    expected_spec_hash: str | None = None,
+) -> Callable[..., Any]:
     """
     Load active implementation for a unit.
 
@@ -33,33 +38,69 @@ def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
 
     Raises:
         VibesafeCheckpointMissing: If no active checkpoint found
-        VibesafeHashMismatch: If hash verification fails
+        VibesafeHashMismatch: If hash verification fails or spec hash mismatches
     """
     config = get_config()
 
-    # Load index to get active spec hash
     index_path = config.resolve_path(config.paths.index)
-    if not index_path.exists():
-        raise VibesafeCheckpointMissing(f"No index found at {index_path}")
+    checkpoints_base = config.resolve_path(config.paths.checkpoints)
 
-    with open(index_path, "rb") as f:
-        index = tomllib.load(f)
+    checkpoint_dir: Path | None = None
+    active_hash: str | None = None
 
-    # Get active hash for this unit
-    unit_index = index.get(unit_id)
-    if not unit_index:
+    if index_path.exists():
+        with open(index_path, "rb") as f:
+            index = tomllib.load(f)
+
+        unit_index = index.get(unit_id)
+        if unit_index:
+            candidate_hash = unit_index.get("active")
+            if candidate_hash:
+                active_hash = candidate_hash
+                unit_path = unit_id.replace(".", "/")
+                checkpoint_dir = checkpoints_base / unit_path / candidate_hash[:16]
+
+    allow_fallback = expected_spec_hash is None
+
+    if (checkpoint_dir is None or active_hash is None) and allow_fallback:
+        resolved = _resolve_checkpoint_from_disk(config, unit_id)
+        if resolved is None:
+            message = (
+                f"No index found at {index_path}"
+                if not index_path.exists()
+                else f"No active checkpoint for unit: {unit_id}"
+            )
+            raise VibesafeCheckpointMissing(message)
+
+        checkpoint_dir, resolved_hash = resolved
+        active_hash = resolved_hash or checkpoint_dir.name
+
+        if resolved_hash:
+            try:  # Best-effort reconstruction of index
+                from datetime import UTC, datetime
+
+                update_index(unit_id, resolved_hash, created=datetime.now(UTC).isoformat())
+            except Exception:
+                pass
+
+    if checkpoint_dir is None or active_hash is None:
         raise VibesafeCheckpointMissing(f"No active checkpoint for unit: {unit_id}")
 
-    active_hash = unit_index.get("active")
-    if not active_hash:
-        raise VibesafeCheckpointMissing(f"No active hash in index for unit: {unit_id}")
+    if expected_spec_hash and active_hash:
+        mismatch = False
+        if len(active_hash) < len(expected_spec_hash):
+            mismatch = not expected_spec_hash.startswith(active_hash)
+        else:
+            mismatch = expected_spec_hash != active_hash
 
-    # Get checkpoint directory
-    checkpoints_base = config.resolve_path(config.paths.checkpoints)
-    unit_path = unit_id.replace(".", "/")
-    checkpoint_dir = checkpoints_base / unit_path / active_hash[:16]
+        if mismatch:
+            raise VibesafeHashMismatch(
+                f"Spec hash mismatch for {unit_id}: active checkpoint targets {active_hash[:10]} "
+                f"but current spec hash is {expected_spec_hash[:10]}. "
+                f"Run 'vibesafe compile --target {unit_id}' to regenerate."
+            )
 
-    if not checkpoint_dir.exists():
+    if checkpoint_dir is None or not checkpoint_dir.exists():
         raise VibesafeCheckpointMissing(f"Checkpoint directory not found: {checkpoint_dir}")
 
     # Load implementation
@@ -121,6 +162,45 @@ def _verify_checkpoint_hash(checkpoint_dir: Path, impl_path: Path) -> None:
         raise VibesafeHashMismatch(
             f"Checkpoint hash mismatch! Expected {stored_chk_hash}, got {computed_chk_hash}"
         )
+
+
+def _resolve_checkpoint_from_disk(
+    config,
+    unit_id: str,
+) -> tuple[Path, str | None] | None:
+    """Best-effort resolution of a checkpoint when the index is missing."""
+
+    checkpoints_base = config.resolve_path(config.paths.checkpoints)
+    unit_dir = checkpoints_base / unit_id.replace(".", "/")
+    if not unit_dir.exists():
+        return None
+
+    candidates = sorted(
+        (path for path in unit_dir.iterdir() if path.is_dir()),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+
+    if not candidates:
+        return None
+
+    candidate = candidates[0]
+    spec_hash = _read_spec_hash(candidate)
+    return candidate, spec_hash
+
+
+def _read_spec_hash(checkpoint_dir: Path) -> str | None:
+    """Extract spec hash from a checkpoint directory if metadata is present."""
+
+    meta_path = checkpoint_dir / "meta.toml"
+    if not meta_path.exists():
+        return None
+
+    with open(meta_path, "rb") as f:
+        meta = tomllib.load(f)
+
+    spec_hash = meta.get("spec_sha")
+    return spec_hash if isinstance(spec_hash, str) else None
 
 
 def build_shim(unit_id: str) -> str:

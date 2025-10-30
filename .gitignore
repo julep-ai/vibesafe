@@ -209,3 +209,7 @@ __marimo__/
 # Vibesafe
 .vibesafe/
 __generated__/
+
+# Node tooling
+node_modules/
+docs/node_modules/

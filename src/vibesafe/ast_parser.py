@@ -5,12 +5,14 @@ AST parsing utilities to extract spec components.
 import ast
 import contextlib
 import doctest
+import hashlib
 import inspect
 import linecache
 import re
 import textwrap
 from collections.abc import Callable
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 
 class SpecExtractor:
@@ -18,10 +20,11 @@ class SpecExtractor:
 
     def __init__(self, func: Callable[..., Any]):
         self.func = func
-        raw_source = getattr(func, "__vibesafe_source__", None)
+        self._func_obj = cast(Any, func)
+        raw_source = getattr(self._func_obj, "__vibesafe_source__", None)
         if raw_source is None:
             raw_source = self._load_source(func)
-            func.__vibesafe_source__ = raw_source
+            self._func_obj.__vibesafe_source__ = raw_source
 
         # Dedent source to handle nested definitions or REPL stubs
         self.source = textwrap.dedent(raw_source)
@@ -44,7 +47,8 @@ class SpecExtractor:
     def _source_from_linecache(func: Callable[..., Any]) -> str | None:
         """Attempt to reconstruct source using linecache for interactive sessions."""
 
-        filename = inspect.getsourcefile(func) or func.__code__.co_filename
+        func_obj = cast(Any, func)
+        filename = inspect.getsourcefile(func) or func_obj.__code__.co_filename
         if not filename:
             return None
 
@@ -52,7 +56,7 @@ class SpecExtractor:
         if not lines:
             return None
 
-        lineno = func.__code__.co_firstlineno
+        lineno = func_obj.__code__.co_firstlineno
         if lineno <= 0 or lineno > len(lines):
             return None
 
@@ -68,7 +72,8 @@ class SpecExtractor:
 
         signature = inspect.signature(func)
         prefix = "async def" if inspect.iscoroutinefunction(func) else "def"
-        return f"{prefix} {func.__name__}{signature}:\n    ...\n"
+        func_obj = cast(Any, func)
+        return f"{prefix} {func_obj.__name__}{signature}:\n    ...\n"
 
     def extract_signature(self) -> str:
         """
@@ -78,7 +83,8 @@ class SpecExtractor:
             Signature string (e.g., "def foo(a: int, b: str) -> int")
         """
         sig = inspect.signature(self.func)
-        name = self.func.__name__
+        func_obj = cast(Any, self.func)
+        name = func_obj.__name__
 
         # Build parameter string
         params = []
@@ -142,8 +148,10 @@ class SpecExtractor:
 
         # Find the function definition line
         func_def_line = 0
+        func_obj = cast(Any, self.func)
+
         for i, line in enumerate(source_lines):
-            if "def " in line and self.func.__name__ in line:
+            if "def " in line and func_obj.__name__ in line:
                 func_def_line = i
                 break
 
@@ -151,7 +159,7 @@ class SpecExtractor:
         body_start = func_def_line + 1
 
         # Skip docstring
-        if self.func.__doc__:
+        if func_obj.__doc__:
             in_docstring = False
             for i in range(func_def_line + 1, len(source_lines)):
                 line = source_lines[i].strip()
@@ -209,7 +217,7 @@ class SpecExtractor:
         except Exception:
             return []
 
-    def extract_dependencies(self) -> dict[str, str]:
+    def extract_dependencies(self) -> dict[str, dict[str, str]]:
         """
         Extract static dependencies (names referenced in spec body).
 
@@ -236,18 +244,32 @@ class SpecExtractor:
         _NameCollector().visit(body_tree)
 
         module_dict = getattr(self.module, "__dict__", {})
-        dependencies: dict[str, str] = {}
+        dependencies: dict[str, dict[str, str]] = {}
+        func_obj = cast(Any, self.func)
 
         for name in sorted(names):
-            if name == self.func.__name__:
+            if name == func_obj.__name__:
                 continue
             if name in module_dict:
                 obj = module_dict[name]
                 try:
                     source = inspect.getsource(obj)
+                    file_path = inspect.getfile(obj)
                 except (OSError, TypeError):
                     continue
-                dependencies[name] = textwrap.dedent(source).strip()
+                normalized_source = textwrap.dedent(source).strip()
+                file_hash = ""
+                try:
+                    with open(file_path, "rb") as fh:
+                        file_hash = hashlib.sha256(fh.read()).hexdigest()
+                except Exception:
+                    file_hash = ""
+
+                dependencies[name] = {
+                    "source": normalized_source,
+                    "path": str(Path(file_path).resolve()) if file_path else "",
+                    "file_hash": file_hash,
+                }
 
         return dependencies
 

@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from vibesafe import VibesafeHandled, vibesafe
-from vibesafe.config import VibesafeConfig
+from vibesafe.config import VibesafeConfig, get_config
 
 # Tell pytest not to collect test_checkpoint and test_unit from vibesafe.testing
 collect_ignore_glob = []
@@ -206,6 +206,12 @@ def clear_defless_registry():
     # Store original registry
     original = vibesafe._registry.copy()
     vibesafe._registry.clear()
+
+    # Remove index file so tests start without active checkpoints
+    config = get_config(reload=True)
+    index_path = config.resolve_path(config.paths.index)
+    if index_path.exists():
+        index_path.unlink()
 
     yield
 

@@ -3,6 +3,7 @@
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 import click
 from rich.console import Console
@@ -394,6 +395,52 @@ def diff(target: str | None) -> None:
 
 
 @main.command()
+def check() -> None:
+    """Run lint, type-check, doctests, and drift detection."""
+
+    _import_project_modules()
+
+    overall_success = True
+
+    console.print("[bold]Running lint (ruff)...[/bold]")
+    if not _run_command(["ruff", "check", "src", "tests", "examples"]):
+        overall_success = False
+
+    console.print("[bold]Running type checks (mypy)...[/bold]")
+    if not _run_command(["mypy", "src/vibesafe"]):
+        overall_success = False
+
+    console.print("[bold]Running doctests...[/bold]")
+    test_results = run_all_tests()
+    failed_units = [uid for uid, result in test_results.items() if not result.passed]
+    if failed_units:
+        overall_success = False
+        for uid in failed_units:
+            result = test_results[uid]
+            console.print(f"[red]✗ {uid}[/red] ({result.failures}/{result.total} failed)")
+    else:
+        total_tests = sum(result.total for result in test_results.values())
+        console.print(f"[green]✓ All doctests passed ({total_tests} total)[/green]")
+
+    console.print("[bold]Checking for drift...[/bold]")
+    drift_count, missing_index = _detect_drift()
+    if missing_index:
+        overall_success = False
+        console.print("[red]✗ No index found – run 'vibesafe compile' and 'vibesafe save'.[/red]")
+    elif drift_count:
+        overall_success = False
+        console.print(f"[red]✗ Drift detected in {drift_count} unit(s).[/red]")
+    else:
+        console.print("[green]✓ No drift detected.[/green]")
+
+    if overall_success:
+        console.print("\n[bold green]Check complete – all gates passed.[/bold green]")
+    else:
+        console.print("\n[bold red]Check failed – see messages above.[/bold red]")
+        sys.exit(1)
+
+
+@main.command()
 @click.option("--target", help="Unit ID to open in the REPL")
 def repl(target: str | None) -> None:
     """Interactive compile/test loop for a vibesafe unit."""
@@ -412,14 +459,16 @@ def repl(target: str | None) -> None:
             console.print(f"  - {uid}")
         sys.exit(1)
 
-    if target not in registry:
-        console.print(f"[red]Unknown unit: {target}[/red]")
+    target_id = cast(str, target)
+
+    if target_id not in registry:
+        console.print(f"[red]Unknown unit: {target_id}[/red]")
         console.print("Known units:")
         for uid in sorted(registry):
             console.print(f"  - {uid}")
         sys.exit(1)
 
-    unit_meta = registry[target]
+    unit_meta = registry[target_id]
 
     def _unit_hash_state() -> tuple[str, str, str]:
         config = get_config()
@@ -455,7 +504,7 @@ def repl(target: str | None) -> None:
 
             with open(index_path, "rb") as fh:
                 index = tomllib.load(fh)
-                unit_entry = index.get(target, {})
+                unit_entry = index.get(target_id, {})
                 active_hash = unit_entry.get("active", "—")
                 created_at = unit_entry.get("created", "—")
 
@@ -465,7 +514,7 @@ def repl(target: str | None) -> None:
         spec = extract_spec(unit_meta["func"])
         current_hash, active_hash, created_at = _unit_hash_state()
 
-        console.rule(f"Vibesafe REPL — {target}")
+        console.rule(f"Vibesafe REPL — {target_id}")
         console.print(
             f"[bold]Docstring lines:[/bold] {len(spec['docstring'].splitlines())} • "
             f"[bold]Doctests:[/bold] {len(spec['doctests'])}"
@@ -483,24 +532,24 @@ def repl(target: str | None) -> None:
         nonlocal unit_meta
         console.print("\n[bold]Generating implementation...[/bold]")
         try:
-            checkpoint_info = generate_for_unit(target, force=force)
+            checkpoint_info = generate_for_unit(target_id, force=force)
             update_index(
-                target,
+                target_id,
                 checkpoint_info["spec_hash"],
                 created=checkpoint_info.get("created_at"),
             )
-            shim_path = write_shim(target)
+            shim_path = write_shim(target_id)
             console.print(f"  ✓ spec hash {checkpoint_info['spec_hash'][:8]} • shim {shim_path}")
         except Exception as exc:  # pragma: no cover - surfaced to CLI user
             console.print(f"[red]✗ Generation failed: {exc}[/red]")
             return
 
-        unit_meta = vibesafe.get_unit(target) or unit_meta
+        unit_meta = vibesafe.get_unit(target_id) or unit_meta
         _run_tests()
 
     def _run_tests() -> None:
         console.print("\n[bold]Running tests...[/bold]")
-        result = test_unit(target)
+        result = test_unit(target_id)
         if result:
             console.print(f"[green]✓ {result.total} test(s) passed[/green]")
         else:
@@ -687,6 +736,73 @@ def _import_project_modules() -> None:
             except Exception:
                 # Skip files that can't be imported
                 pass
+
+
+def _run_command(cmd: list[str]) -> bool:
+    """Execute a shell command, returning True on success."""
+
+    try:
+        subprocess.run(cmd, check=True, text=True)
+        console.print("  [green]✓ success[/green]")
+        return True
+    except FileNotFoundError:
+        console.print(f"  [red]✗ Command not found:[/red] {' '.join(cmd)}")
+    except subprocess.CalledProcessError as exc:
+        output = exc.stderr.strip() if exc.stderr else exc.stdout.strip()
+        detail = f" ({output})" if output else ""
+        console.print(f"  [red]✗ Command failed ({exc.returncode})[/red]{detail}")
+    return False
+
+
+def _detect_drift() -> tuple[int, bool]:
+    """Return (drift_count, missing_index)."""
+
+    registry = vibesafe.get_registry()
+    if not registry:
+        return 0, False
+
+    config = get_config()
+    index_path = config.resolve_path(config.paths.index)
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:  # pragma: no cover
+        import tomli as tomllib  # type: ignore[misc]
+
+    if not index_path.exists():
+        return 0, True
+
+    with open(index_path, "rb") as fh:
+        index = tomllib.load(fh)
+
+    drift_count = 0
+    for unit_id, unit_meta in registry.items():
+        provider_name = unit_meta.get("provider") or "default"
+        provider_cfg = config.get_provider(provider_name)
+        spec = extract_spec(unit_meta["func"])
+        dependency_digest = compute_dependency_digest(spec["dependencies"])
+        provider_params = {
+            "temperature": provider_cfg.temperature,
+            "seed": provider_cfg.seed,
+            "timeout": provider_cfg.timeout,
+        }
+        template_id = unit_meta.get("template", "prompts/function.j2")
+        current_hash = compute_spec_hash(
+            signature=spec["signature"],
+            docstring=spec["docstring"],
+            body_before_handled=spec["body_before_handled"],
+            template_id=template_id,
+            provider_model=provider_cfg.model,
+            provider_params=provider_params,
+            dependency_digest=dependency_digest,
+        )
+
+        unit_index = index.get(unit_id, {})
+        active_hash = unit_index.get("active")
+        if not active_hash or active_hash != current_hash:
+            drift_count += 1
+
+    return drift_count, False
 
 
 if __name__ == "__main__":
