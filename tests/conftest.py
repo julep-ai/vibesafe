@@ -2,8 +2,8 @@
 Shared pytest fixtures for vibesafe tests.
 """
 
-from collections.abc import Callable
 import importlib
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 

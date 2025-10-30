@@ -1,16 +1,17 @@
-"""
-Testing utilities for generated implementations.
-"""
+"""Testing utilities for generated implementations."""
 
 import doctest
 import importlib.util
+import json
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 from typing import Any
 
 from vibesafe.ast_parser import extract_spec
 from vibesafe.config import get_config
+from vibesafe.runtime import load_active
 
 
 class TestResult:
@@ -55,28 +56,52 @@ def test_checkpoint(checkpoint_dir: Path, unit_meta: dict[str, Any]) -> TestResu
     if not impl_path.exists():
         return TestResult(passed=False, errors=["Implementation file not found"])
 
-    # Extract spec to get doctests
+    # Extract spec to get doctests and property tests
     func = unit_meta["func"]
     spec = extract_spec(func)
     doctests = spec["doctests"]
+    hypothesis_blocks = spec.get("hypothesis_blocks", [])
 
-    doctest_result = TestResult(passed=True, total=0)
+    unit_id = unit_meta["module"] + "/" + unit_meta["qualname"]
+    _ensure_defless_harness(unit_id, unit_meta, spec)
 
-    if doctests:
+    needs_impl = bool(doctests) or bool(hypothesis_blocks)
+    impl_func = None
+    if needs_impl:
         try:
             impl_func = _load_impl_func(impl_path, unit_meta)
         except Exception as e:
             return TestResult(passed=False, errors=[f"Failed to load implementation: {e}"])
 
+    doctest_result = TestResult(passed=True, total=0)
+    if doctests and impl_func is not None:
         doctest_result = _run_doctests(impl_func, spec["docstring"], doctests)
         if not doctest_result.passed:
             return doctest_result
 
+    property_total = 0
+    if hypothesis_blocks and impl_func is not None:
+        property_total, property_errors = _run_hypothesis_tests(
+            unit_id, impl_func, hypothesis_blocks
+        )
+        if property_errors:
+            return TestResult(
+                passed=False,
+                failures=len(property_errors),
+                total=property_total,
+                errors=property_errors,
+            )
+
     gate_errors = _run_quality_gates(impl_path)
     if gate_errors:
-        return TestResult(passed=False, failures=doctest_result.failures, total=doctest_result.total, errors=gate_errors)
+        return TestResult(
+            passed=False,
+            failures=len(gate_errors),
+            total=doctest_result.total + property_total,
+            errors=gate_errors,
+        )
 
-    return doctest_result
+    return TestResult(passed=True, failures=0, total=doctest_result.total + property_total)
 
 
 def _load_impl_func(impl_path: Path, unit_meta: dict[str, Any]) -> Any:
@@ -151,8 +176,7 @@ def _run_quality_gates(impl_path: Path) -> list[str]:
                 cmd,
                 cwd=impl_path.parent,
                 check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
             )
         except FileNotFoundError:
@@ -169,6 +193,118 @@ def _run_quality_gates(impl_path: Path) -> list[str]:
         return ["Quality gates unavailable: install ruff and mypy to proceed"]
 
     return [e for e in errors if "not installed" not in e]
+
+
+def _sanitize_unit_id(unit_id: str) -> str:
+    """Convert a unit_id into a filesystem-friendly suffix."""
+
+    return unit_id.replace(".", "_").replace("/", "_")
+
+
+def _ensure_defless_harness(
+    unit_id: str, unit_meta: dict[str, Any], spec: dict[str, Any]
+) -> Path | None:
+    """Write pytest doctest/property harness under tests/defless for a unit."""
+
+    if not spec["doctests"] and not spec.get("hypothesis_blocks"):
+        return None
+
+    dest_dir = Path.cwd() / "tests" / "defless"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = f"test_{_sanitize_unit_id(unit_id)}.py"
+    harness_path = dest_dir / filename
+
+    func_name = unit_meta["qualname"].split(".")[-1]
+    docstring = spec["docstring"] or ""
+    doc_literal = json.dumps(docstring, ensure_ascii=False, indent=4)
+    property_src = "\n\n".join(spec.get("hypothesis_blocks", []))
+    property_literal = json.dumps(property_src, ensure_ascii=False)
+
+    harness = (
+        textwrap.dedent(
+            f"""\
+        \"\"\"Auto-generated doctest harness for {unit_id}.\"\"\"
+
+        import doctest
+        from vibesafe.runtime import load_active
+
+        UNIT_ID = {unit_id!r}
+        FUNC_NAME = {func_name!r}
+        DOCSTRING = {doc_literal}
+        PROPERTY_SRC = {property_literal}
+
+
+        def _exec_properties(func) -> None:
+            if not PROPERTY_SRC:
+                return
+            namespace = {{
+                "load_active": load_active,
+                "UNIT_ID": UNIT_ID,
+                "FUNC_NAME": FUNC_NAME,
+                "func": func,
+            }}
+            exec(PROPERTY_SRC, namespace)
+            for value in list(namespace.values()):
+                if callable(value) and hasattr(value, "hypothesis"):
+                    value()
+
+
+        def test_doctests() -> None:
+            func = load_active(UNIT_ID)
+            if DOCSTRING:
+                globs = {{FUNC_NAME: func}}
+                doctest.run_docstring_examples(
+                    func,
+                    DOCSTRING,
+                    name=UNIT_ID,
+                    optionflags=doctest.ELLIPSIS,
+                    globs=globs,
+                )
+            _exec_properties(func)
+        """
+        ).strip()
+        + "\n"
+    )
+
+    if harness_path.exists() and harness_path.read_text() == harness:
+        return harness_path
+
+    harness_path.write_text(harness)
+    return harness_path
+
+
+def _run_hypothesis_tests(unit_id: str, func: Any, blocks: list[str]) -> tuple[int, list[str]]:
+    """Execute hypothesis property blocks and return (count, errors)."""
+
+    if not blocks:
+        return 0, []
+
+    namespace = {
+        "load_active": load_active,
+        "UNIT_ID": unit_id,
+        "FUNC_NAME": func.__name__ if hasattr(func, "__name__") else "func",
+        "func": func,
+    }
+
+    combined = "\n\n".join(blocks)
+    try:
+        exec(combined, namespace)
+    except Exception as exc:  # pragma: no cover - surfaced to caller
+        return 0, [f"Hypothesis block execution failed: {exc}"]
+
+    executed = 0
+    errors: list[str] = []
+    for value in list(namespace.values()):
+        if callable(value) and hasattr(value, "hypothesis"):
+            executed += 1
+            try:
+                value()
+            except Exception as exc:  # pragma: no cover - property failure details
+                errors.append(
+                    f"Hypothesis property {getattr(value, '__name__', '<property>')} failed: {exc}"
+                )
+    return executed, errors
 
 
 def test_unit(unit_id: str) -> TestResult:

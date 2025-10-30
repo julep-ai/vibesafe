@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from vibesafe.config import (
-    VibesafeConfig,
     PathsConfig,
     ProjectConfig,
     PromptsConfig,
     ProviderConfig,
     SandboxConfig,
+    VibesafeConfig,
     get_config,
 )
 

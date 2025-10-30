@@ -6,7 +6,7 @@ import pytest
 from click.testing import CliRunner
 
 from vibesafe import VibesafeHandled, vibesafe
-from vibesafe.cli import compile, diff, main, save, scan, status, test
+from vibesafe.cli import compile, diff, main, repl, save, scan, status, test
 
 
 class TestCLI:
@@ -97,6 +97,68 @@ class TestCLI:
         assert result.exit_code == 0
         assert "diff" in result.output.lower()
 
+    def test_repl_help(self, runner):
+        """Test repl command help."""
+        result = runner.invoke(repl, ["--help"])
+        assert result.exit_code == 0
+        assert "Interactive" in result.output
+
+    def test_repl_requires_target(self, runner, temp_dir, monkeypatch, clear_defless_registry):
+        """REPL without --target should exit with guidance."""
+        monkeypatch.chdir(temp_dir)
+        monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
+        monkeypatch.setattr("vibesafe.cli.vibesafe.get_registry", lambda: {"demo/unit": {}})
+        result = runner.invoke(repl)
+        assert result.exit_code == 1
+        assert "Specify --target" in result.output
+
+    def test_repl_unknown_unit(self, runner, temp_dir, monkeypatch, clear_defless_registry):
+        """Unknown unit should be rejected."""
+        monkeypatch.chdir(temp_dir)
+        monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
+        monkeypatch.setattr(
+            "vibesafe.cli.vibesafe.get_registry",
+            lambda: {"demo/unit": {}},
+        )
+        result = runner.invoke(repl, ["--target", "missing/unit"])
+        assert result.exit_code == 1
+        assert "Unknown unit" in result.output
+
+    def test_repl_quit_immediately(
+        self,
+        runner,
+        temp_dir,
+        monkeypatch,
+        clear_defless_registry,
+    ):
+        """REPL processes summary then exits on 'q'."""
+
+        monkeypatch.chdir(temp_dir)
+        monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
+
+        @vibesafe.func
+        def demo_spec(x: int) -> int:
+            """Demo.
+
+            >>> demo_spec(1)
+            2
+            """
+
+            yield VibesafeHandled()
+
+        unit_id = demo_spec.__vibesafe_unit_id__
+        unit_meta = vibesafe.get_unit(unit_id)
+
+        monkeypatch.setattr(
+            "vibesafe.cli.vibesafe.get_registry",
+            lambda: {unit_id: unit_meta},
+        )
+        monkeypatch.setattr("vibesafe.cli.vibesafe.get_unit", lambda _: unit_meta)
+
+        result = runner.invoke(repl, ["--target", unit_id], input="q\n")
+        assert result.exit_code == 0
+        assert "Bye!" in result.output
+
     def test_scan_write_shims_flag(self, runner, temp_dir, monkeypatch):
         """Test scan with --write-shims flag."""
         monkeypatch.chdir(temp_dir)
@@ -113,9 +175,7 @@ class TestCLI:
         result = runner.invoke(compile, ["--target", "test/unit", "--help"])
         assert result.exit_code == 0
 
-    def test_save_freeze_flag(
-        self, runner, temp_dir, monkeypatch, clear_defless_registry, mocker
-    ):
+    def test_save_freeze_flag(self, runner, temp_dir, monkeypatch, clear_defless_registry, mocker):
         """save --freeze-http-deps triggers dependency capture."""
 
         monkeypatch.chdir(temp_dir)

@@ -1,7 +1,6 @@
-"""
-Tests for vibesafe.core module.
-"""
+"""Tests for vibesafe.core module."""
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -33,6 +32,21 @@ class TestVibesafeDecorator:
         """Test that decorator initializes with empty registry."""
         decorator = VibesafeDecorator()
         assert decorator._registry == {}
+
+    def test_module_exposes_func_alias(self):
+        """Importing vibesafe package exposes .func convenience alias."""
+        import importlib
+
+        vibesafe_module = importlib.import_module("vibesafe")
+
+        assert hasattr(vibesafe_module, "func")
+        assert hasattr(vibesafe_module, "http")
+
+        @vibesafe_module.func
+        def alias_spec(x: int) -> int:
+            return x
+
+        assert alias_spec.__vibesafe_type__ == "function"
 
     def test_func_decorator_basic(self, clear_defless_registry):
         """Test basic function decoration."""
@@ -125,6 +139,198 @@ class TestVibesafeDecorator:
 
         with pytest.raises(RuntimeError, match="has not been compiled yet"):
             uncompiled_func(5)
+
+    def test_func_decorator_missing_boundary_marker(self, clear_defless_registry):
+        """Test that specs without VibesafeHandled sentinel raise helpfully."""
+
+        @vibesafe.func
+        def missing_marker(msg: str) -> str:
+            """Spec missing the VibesafeHandled boundary."""
+            return msg.upper()
+
+        with pytest.raises(RuntimeError, match="VibesafeHandled"):
+            missing_marker("moo")
+
+    def test_pass_treated_as_boundary(self, clear_defless_registry, monkeypatch):
+        """`pass` placeholders are treated like VibesafeHandled."""
+
+        monkeypatch.setattr(
+            VibesafeDecorator,
+            "_should_auto_generate",
+            lambda self, exc: False,
+        )
+
+        @vibesafe.func
+        def pass_spec(msg: str) -> str:
+            """Placeholder using pass."""
+            pass
+
+        with pytest.raises(RuntimeError) as exc_info:
+            pass_spec("moo")
+
+        assert "Specs must yield" not in str(exc_info.value)
+
+    def test_ellipsis_treated_as_boundary(self, clear_defless_registry, monkeypatch):
+        """`return ...` placeholders are treated like VibesafeHandled."""
+
+        monkeypatch.setattr(
+            VibesafeDecorator,
+            "_should_auto_generate",
+            lambda self, exc: False,
+        )
+
+        @vibesafe.func
+        def ellipsis_spec(msg: str) -> str:
+            """Placeholder using ellipsis."""
+            return ...
+
+        with pytest.raises(RuntimeError) as exc_info:
+            ellipsis_spec("moo")
+
+        assert "Specs must yield" not in str(exc_info.value)
+
+    def test_auto_generate_invoked_in_dev_mode(self, clear_defless_registry, monkeypatch):
+        """Dev mode triggers auto-generation before raising."""
+
+        calls: dict[str, int] = {"count": 0}
+
+        def fake_auto(self, unit_id: str):
+            calls["count"] += 1
+
+            def impl(msg: str) -> str:
+                return f"generated:{msg}"
+
+            return impl
+
+        monkeypatch.setattr(VibesafeDecorator, "_auto_generate_and_load", fake_auto)
+
+        @vibesafe.func
+        def auto_spec(msg: str) -> str:
+            """Docstring with doctest.
+
+            >>> auto_spec("x")
+            'X'
+            """
+
+            return VibesafeHandled()
+
+        result = auto_spec("moo")
+        assert result == "generated:moo"
+        assert calls["count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_http_auto_generate_invoked(self, clear_defless_registry, monkeypatch):
+        """Auto-generation also applies to HTTP endpoints."""
+
+        async def fake_http_impl(name: str) -> dict[str, str]:
+            return {"message": f"hi {name}"}
+
+        async def fake_auto_http(self, unit_id: str):
+            return fake_http_impl
+
+        monkeypatch.setattr(VibesafeDecorator, "_auto_generate_http", fake_auto_http)
+
+        @vibesafe.http(method="GET", path="/hi")
+        async def http_spec(name: str) -> dict[str, str]:
+            """Docstring with doctest.
+
+            >>> import anyio
+            >>> anyio.run(lambda: http_spec("d"))
+            {'message': 'HI D'}
+            """
+
+            return VibesafeHandled()
+
+        response = await http_spec("moo")
+        assert response == {"message": "hi moo"}
+
+    def test_spec_extractor_handles_missing_source(self, clear_defless_registry, monkeypatch):
+        """Specs defined in REPL-like contexts fall back to synthesized source."""
+
+        def _raise_getsource(func):  # pragma: no cover - exercised via test
+            raise OSError("no source")
+
+        monkeypatch.setattr("vibesafe.ast_parser.inspect.getsource", _raise_getsource)
+
+        @vibesafe.func
+        def interactive_spec(x: int) -> int:
+            """Docstring required for REPL specs.
+
+            >>> interactive_spec(1)
+            1
+            """
+
+            yield VibesafeHandled()
+
+        from vibesafe.ast_parser import extract_spec
+
+        unit_id = interactive_spec.__vibesafe_unit_id__
+        stored_func = vibesafe.get_unit(unit_id)["func"]
+        spec = extract_spec(stored_func)
+        assert spec["signature"].startswith("def interactive_spec")
+        assert spec["docstring"].startswith("Docstring required")
+        assert spec["body_before_handled"] == ""
+
+    def test_auto_generate_allows_missing_doctest(self, clear_defless_registry, monkeypatch):
+        """Interactive auto-generation bypasses doctest requirement."""
+
+        from vibesafe.exceptions import VibesafeCheckpointMissing
+        from vibesafe.testing import TestResult
+
+        generate_calls: list[bool] = []
+
+        def fake_generate(unit_id: str, force: bool = False, allow_missing_doctest: bool = False):
+            generate_calls.append(allow_missing_doctest)
+            if not allow_missing_doctest:
+                from vibesafe.exceptions import VibesafeMissingDoctest
+
+                raise VibesafeMissingDoctest("needs doctest")
+            return {
+                "spec_hash": "abc123",
+                "chk_hash": "def456",
+                "prompt_hash": "ghi789",
+                "checkpoint_dir": Path("/tmp"),
+                "impl_path": Path("/tmp/impl.py"),
+                "meta_path": Path("/tmp/meta.toml"),
+                "created_at": "now",
+            }
+
+        monkeypatch.setattr("vibesafe.codegen.generate_for_unit", fake_generate)
+        monkeypatch.setattr("vibesafe.runtime.update_index", lambda *a, **k: None)
+        monkeypatch.setattr("vibesafe.runtime.write_shim", lambda unit_id: Path("/tmp/shim.py"))
+
+        def fake_load_active(unit_id: str):
+            if not generate_calls:
+                raise VibesafeCheckpointMissing("missing")
+            return lambda msg: f"generated:{msg}"
+
+        monkeypatch.setattr("vibesafe.runtime.load_active", fake_load_active)
+        monkeypatch.setattr(
+            "vibesafe.testing.test_unit",
+            lambda unit_id: TestResult(passed=True, total=0),
+        )
+        monkeypatch.setattr(VibesafeDecorator, "_should_auto_generate", lambda self, exc: True)
+
+        @vibesafe.func
+        def repl_func(msg: str) -> str:
+            return VibesafeHandled()
+
+        result = repl_func("moo")
+        assert result == "generated:moo"
+        assert generate_calls == [False, True]
+
+    def test_missing_doctest_hint_in_error(self, clear_defless_registry):
+        """Runtime error mentions missing doctest when auto generation fails."""
+
+        @vibesafe.func
+        def missing_doc(msg: str) -> str:
+            """No doctest present."""
+            return VibesafeHandled()
+
+        with pytest.raises(RuntimeError) as exc_info:
+            missing_doc("moo")
+
+        assert "does not declare any doctests" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_http_decorator_raises_on_missing_checkpoint(self, clear_defless_registry):

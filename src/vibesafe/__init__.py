@@ -15,12 +15,18 @@ from vibesafe.exceptions import (
     VibesafeTypeError,
     VibesafeValidationError,
 )
+from vibesafe.fastapi import mount
 from vibesafe.runtime import load_active
 
 __version__ = "0.1.0"
 
+func = vibesafe.func
+http = vibesafe.http
+
 __all__ = [
     "vibesafe",
+    "func",
+    "http",
     "VibesafeHandled",
     "VibeHandled",
     "VibesafeError",
@@ -31,5 +37,6 @@ __all__ = [
     "VibesafeProviderError",
     "VibesafeValidationError",
     "load_active",
+    "mount",
     "__version__",
 ]

@@ -9,6 +9,7 @@ from vibesafe.runtime import load_active
 multiply = load_active("test_vibesafe/multiply")
 factorial = load_active("test_vibesafe/factorial")
 
+
 def main():
     print("=" * 60)
     print("🚀 Vibesafe Demo - AI-Generated Functions")
@@ -16,12 +17,7 @@ def main():
 
     # Test multiply function
     print("\n📊 Testing multiply function:")
-    test_cases_multiply = [
-        (2, 3, 6),
-        (5, 7, 35),
-        (-3, 4, -12),
-        (0, 10, 0)
-    ]
+    test_cases_multiply = [(2, 3, 6), (5, 7, 35), (-3, 4, -12), (0, 10, 0)]
 
     for a, b, expected in test_cases_multiply:
         result = multiply(a, b)
@@ -30,12 +26,7 @@ def main():
 
     # Test factorial function
     print("\n📊 Testing factorial function:")
-    test_cases_factorial = [
-        (0, 1),
-        (1, 1),
-        (5, 120),
-        (7, 5040)
-    ]
+    test_cases_factorial = [(0, 1), (1, 1), (5, 120), (7, 5040)]
 
     for n, expected in test_cases_factorial:
         result = factorial(n)
@@ -58,6 +49,7 @@ def main():
     print("\n" + "=" * 60)
     print("✨ Demo complete! All AI-generated functions work correctly.")
     print("=" * 60)
+
 
 if __name__ == "__main__":
     main()

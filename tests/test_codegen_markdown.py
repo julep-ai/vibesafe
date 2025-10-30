@@ -2,10 +2,11 @@
 Tests for markdown code block stripping in codegen.
 """
 
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
+
 from vibesafe.codegen import CodeGenerator
-from vibesafe.config import ProviderConfig
 
 
 class TestMarkdownStripping:
@@ -16,18 +17,18 @@ class TestMarkdownStripping:
         generator = self._create_generator()
 
         # Test with ```python block
-        code_with_python_block = '''```python
+        code_with_python_block = """```python
 def test_func():
     return 42
-```'''
+```"""
         cleaned = generator._clean_generated_code(code_with_python_block)
         assert cleaned == "def test_func():\n    return 42"
 
         # Test with plain ``` block
-        code_with_plain_block = '''```
+        code_with_plain_block = """```
 def another_func():
     return "hello"
-```'''
+```"""
         cleaned = generator._clean_generated_code(code_with_plain_block)
         assert cleaned == 'def another_func():\n    return "hello"'
 
@@ -46,12 +47,12 @@ def another_func():
         """Test that extra whitespace is trimmed."""
         generator = self._create_generator()
 
-        code_with_whitespace = '''
+        code_with_whitespace = """
 
 def whitespace_func():
     return 1
 
-'''
+"""
         cleaned = generator._clean_generated_code(code_with_whitespace)
         assert cleaned == "def whitespace_func():\n    return 1"
 
@@ -59,7 +60,7 @@ def whitespace_func():
         """Test handling of markdown blocks with extra whitespace."""
         generator = self._create_generator()
 
-        messy_code = '''
+        messy_code = """
 
 ```python
 
@@ -68,7 +69,7 @@ def messy_func():
 
 ```
 
-'''
+"""
         cleaned = generator._clean_generated_code(messy_code)
         assert cleaned == 'def messy_func():\n    return "cleaned"'
 
@@ -89,8 +90,8 @@ def backtick_func():
         """Test handling of empty markdown blocks."""
         generator = self._create_generator()
 
-        empty_block = '''```python
-```'''
+        empty_block = """```python
+```"""
         cleaned = generator._clean_generated_code(empty_block)
         assert cleaned == ""
 
@@ -139,24 +140,17 @@ def complex_func(a: int, b: str) -> dict:
         mock_func.__name__ = "test_func"
         mock_func.__module__ = "test_module"
 
-        unit_meta = {
-            "func": mock_func,
-            "type": "function",
-            "provider": "default"
-        }
+        unit_meta = {"func": mock_func, "type": "function", "provider": "default"}
 
         # Mock the config and provider
-        with patch("vibesafe.codegen.get_config") as mock_config, \
-             patch("vibesafe.codegen.get_provider") as mock_provider, \
-             patch("vibesafe.codegen.extract_spec") as mock_extract:
-
+        with (
+            patch("vibesafe.codegen.get_config") as mock_config,
+            patch("vibesafe.codegen.get_provider") as mock_provider,
+            patch("vibesafe.codegen.extract_spec") as mock_extract,
+        ):
             # Setup mock config
             mock_cfg = Mock()
-            mock_cfg.get_provider.return_value = Mock(
-                model="test-model",
-                seed=42,
-                temperature=0.0
-            )
+            mock_cfg.get_provider.return_value = Mock(model="test-model", seed=42, temperature=0.0)
             mock_config.return_value = mock_cfg
 
             # Setup mock spec

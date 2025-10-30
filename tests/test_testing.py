@@ -99,9 +99,7 @@ class TestTestCheckpoint:
         # Note: May fail if impl doesn't match, depends on sample_impl
         assert isinstance(result, TestResult)
 
-    def test_checkpoint_gates_failure(
-        self, checkpoint_dir, clear_defless_registry, monkeypatch
-    ):
+    def test_checkpoint_gates_failure(self, checkpoint_dir, clear_defless_registry, monkeypatch):
         """Gate failures should surface as test failures."""
 
         @vibesafe.func
@@ -136,6 +134,72 @@ def gated_func(a: int) -> int:
         result = test_checkpoint(checkpoint_dir, unit_meta)
         assert not result.passed
         assert any("ruff failed" in err for err in result.errors)
+
+    def test_checkpoint_writes_defless_file(
+        self,
+        checkpoint_dir,
+        temp_dir,
+        test_config,
+        clear_defless_registry,
+        monkeypatch,
+    ):
+        """Doctest harness files are written under tests/defless."""
+
+        monkeypatch.chdir(temp_dir)
+        from vibesafe import config as config_module
+
+        config_module._config = test_config
+
+        @vibesafe.func
+        def doc_func(msg: str) -> str:
+            """Echo.
+
+            >>> doc_func("hi")
+            'hi'
+
+            ```hypothesis
+            from hypothesis import given, strategies as st
+
+            @given(st.text())
+            def test_roundtrip(s: str) -> None:
+                assert func(s) == s
+            ```
+            """
+
+            yield VibesafeHandled()
+
+        impl_path = checkpoint_dir / "impl.py"
+        impl_path.write_text(
+            """
+def doc_func(msg: str) -> str:
+    return msg
+""".strip()
+        )
+
+        unit_meta = {
+            "func": doc_func,
+            "module": doc_func.__module__,
+            "qualname": doc_func.__qualname__,
+        }
+
+        monkeypatch.setattr("vibesafe.testing._run_quality_gates", lambda path: [])
+
+        unit_id = unit_meta["module"] + "/" + unit_meta["qualname"]
+        harness_path = (
+            temp_dir
+            / "tests"
+            / "defless"
+            / f"test_{unit_id.replace('.', '_').replace('/', '_')}.py"
+        )
+        assert not harness_path.exists()
+
+        result = test_checkpoint(checkpoint_dir, unit_meta)
+
+        assert harness_path.exists()
+        contents = harness_path.read_text()
+        assert unit_id in contents
+        assert "'hi'" in contents
+        assert result.total == 2
 
 
 class TestTestUnit:

@@ -96,7 +96,7 @@ class TestLoadActive:
         sample_meta.rename(meta_path)
 
         # Corrupt checksum so verification fails
-        meta_text = meta_path.read_text().replace("chk_sha = \"def456ghi789\"", "chk_sha = \"bogus\"")
+        meta_text = meta_path.read_text().replace('chk_sha = "def456ghi789"', 'chk_sha = "bogus"')
         meta_path.write_text(meta_text)
 
         monkeypatch.chdir(temp_dir)
@@ -240,4 +240,4 @@ active = "hash2"
         content = index_path.read_text()
         assert "unit/func" in content
         assert "hash123" in content
-        assert f"created = \"{created_at}\"" in content
+        assert f'created = "{created_at}"' in content

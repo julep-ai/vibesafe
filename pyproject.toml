@@ -1,6 +1,6 @@
 [project]
 name = "vibesafe"
-version = "0.1.1"
+version = "0.1.2b2"
 description = "Vibe safely"
 readme = "README.md"
 authors = [
@@ -18,8 +18,10 @@ dependencies = [
     "httpx>=0.27.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
+    "poethepoet>=0.37.0",
+    "ty>=0.0.1a25",
     "pytest>=8.0.0",
     "pytest-xdist>=3.5.0",  # Parallel test execution
     "pytest-cov>=5.0.0",     # Coverage reporting
@@ -30,10 +32,28 @@ dev = [
     "ruff>=0.6.0",
     "pyright>=1.1.0",
     "anyio>=4.0.0",          # For async examples
+    "hypothesis>=6.100.0",
 ]
+
+[tool.ty.src]
+exclude = [
+    "examples/",
+    "docs/",
+    "benchmarks/",
+    "test_*.py",
+    "tests/",  # Ignore type checking in tests for dynamic stubs/mocks
+]
+
+[tool.ty.rules]
+unused-ignore-comment = "ignore"
+redundant-cast = "ignore"
+possibly-missing-attribute = "ignore"   # TODO: Change to "error"
+possibly-missing-import = "ignore"      # TODO: Change to "error"
+possibly-missing-implicit-call = "ignore"      # TODO: Change to "error"
 
 [project.scripts]
 vibesafe = "vibesafe.cli:main"
+vibe = "vibesafe.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]
@@ -128,5 +148,17 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # Allow unused imports in __init__.py
 "tests/**/*.py" = ["ARG", "S101", "F841", "E721"]  # Allow unused args, asserts, vars in tests
+"test_*.py" = ["ARG", "S101", "F841", "E721"]  # Allow unused args, asserts, vars in tests
 "examples/**/*.py" = ["ARG", "F841"]  # Allow unused args and vars in example specs
 "src/vibesafe/mcp.py" = ["ARG002"]  # MCP handlers require params even if unused
+
+[tool.poe.tasks]
+lint = "ruff check --fix --unsafe-fixes"
+format = "ruff format"
+typecheck = "ty src/vibesafe"
+test = "pytest"
+check = [
+  "format",
+  "lint",
+  "typecheck"
+]

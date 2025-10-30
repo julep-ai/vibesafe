@@ -182,7 +182,7 @@ vibe status
 vibe repl    [--target UNIT]
 ```
 
-> **Implementation note:** In the current repository the entry point is named `vibesafe`, so the commands appear as `vibesafe scan`, `vibesafe status`, `vibesafe diff`, etc.
+> **Implementation note:** The CLI is exposed as both `vibe` (alias) and `vibesafe`. You can run either `vibe scan` or `vibesafe scan`; both map to the same entrypoint in this repository.
 
 * `scan`: finds specs, reports doctest count, drift, missing shims; `--write-shims` scaffolds `__generated__/`.
 * `compile`: generates code + tests; writes checkpoint; updates shims.
@@ -199,7 +199,9 @@ vibe repl    [--target UNIT]
 
 > This is the “how to build it” section for the core maintainers.
 
-## 7) Package structure
+## 7) Package structure *(Aspirational)*
+
+> **Status:** The following module layout is a Phase 1 refactor plan and does not yet match the live repository. Treat it as a roadmap rather than current state.
 
 ```
 vibesafe/

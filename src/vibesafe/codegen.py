@@ -2,10 +2,10 @@
 Code generation orchestration - prompt rendering and LLM calls.
 """
 
-import sys
-from datetime import datetime, timezone
 import platform
+import sys
 import textwrap
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,17 +19,17 @@ from jinja2 import Environment, FileSystemLoader
 from vibesafe import __version__
 from vibesafe.ast_parser import extract_spec
 from vibesafe.config import get_config
+from vibesafe.exceptions import (
+    VibesafeMissingDoctest,
+    VibesafeProviderError,
+    VibesafeValidationError,
+)
 from vibesafe.hashing import (
     compute_checkpoint_hash,
     compute_dependency_digest,
     compute_prompt_hash,
     compute_spec_hash,
     hash_code,
-)
-from vibesafe.exceptions import (
-    VibesafeMissingDoctest,
-    VibesafeProviderError,
-    VibesafeValidationError,
 )
 from vibesafe.providers import get_provider
 
@@ -51,7 +51,7 @@ class CodeGenerator:
         self.func = unit_meta["func"]
         self.spec = extract_spec(self.func)
 
-    def generate(self, force: bool = False) -> dict[str, Any]:
+    def generate(self, force: bool = False, allow_missing_doctest: bool = False) -> dict[str, Any]:
         """
         Generate implementation for this unit.
 
@@ -61,7 +61,7 @@ class CodeGenerator:
         Returns:
             Dictionary with checkpoint info (spec_hash, chk_hash, path, etc.)
         """
-        if not self.spec["doctests"]:
+        if not self.spec["doctests"] and not allow_missing_doctest:
             raise VibesafeMissingDoctest(
                 f"Spec {self.unit_id} does not declare any doctests; add at least one example."
             )
@@ -172,27 +172,27 @@ class CodeGenerator:
             Clean Python code
         """
         # Remove markdown code blocks if present
-        lines = code.strip().split('\n')
+        lines = code.strip().split("\n")
 
         # Check if the code is wrapped in markdown code blocks
-        if lines and lines[0].strip().startswith('```'):
+        if lines and lines[0].strip().startswith("```"):
             # Find the start and end of the code block
             start_idx = 1  # Skip the opening ```python or ```
             end_idx = len(lines)
 
             # Find the closing ```
             for i in range(len(lines) - 1, 0, -1):
-                if lines[i].strip() == '```':
+                if lines[i].strip() == "```":
                     end_idx = i
                     break
 
             # Extract just the code between the markers
-            code = '\n'.join(lines[start_idx:end_idx])
+            code = "\n".join(lines[start_idx:end_idx])
 
         # Strip trailing whitespace from each line (for linting)
-        lines = code.strip().split('\n')
+        lines = code.strip().split("\n")
         lines = [line.rstrip() for line in lines]
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def _validate_generated_code(self, code: str) -> None:
         """
@@ -224,11 +224,13 @@ class CodeGenerator:
         # Write implementation
         impl_path = checkpoint_dir / "impl.py"
         # Ensure code ends with a newline for linting
-        code_with_newline = generated_code if generated_code.endswith('\n') else generated_code + '\n'
+        code_with_newline = (
+            generated_code if generated_code.endswith("\n") else generated_code + "\n"
+        )
         impl_path.write_text(code_with_newline)
 
         # Write metadata
-        created_at = datetime.now(timezone.utc).isoformat()
+        created_at = datetime.now(UTC).isoformat()
         meta_path = checkpoint_dir / "meta.toml"
         template_id = self.unit_meta.get("template", "prompts/function.j2")
         dependency_digest = compute_dependency_digest(self.spec["dependencies"])
@@ -294,7 +296,9 @@ class CodeGenerator:
         }
 
 
-def generate_for_unit(unit_id: str, force: bool = False) -> dict[str, Any]:
+def generate_for_unit(
+    unit_id: str, force: bool = False, allow_missing_doctest: bool = False
+) -> dict[str, Any]:
     """
     Generate code for a specific unit.
 
@@ -312,4 +316,4 @@ def generate_for_unit(unit_id: str, force: bool = False) -> dict[str, Any]:
         raise ValueError(f"Unit not found: {unit_id}")
 
     generator = CodeGenerator(unit_id, unit_meta)
-    return generator.generate(force=force)
+    return generator.generate(force=force, allow_missing_doctest=allow_missing_doctest)

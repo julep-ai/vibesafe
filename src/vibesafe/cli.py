@@ -9,13 +9,13 @@ from rich.console import Console
 from rich.table import Table
 
 from vibesafe import __version__
+from vibesafe.ast_parser import extract_spec
 from vibesafe.codegen import generate_for_unit
 from vibesafe.config import get_config
 from vibesafe.core import vibesafe
+from vibesafe.hashing import compute_dependency_digest, compute_spec_hash
 from vibesafe.runtime import update_index, write_shim
 from vibesafe.testing import run_all_tests, test_unit
-from vibesafe.ast_parser import extract_spec
-from vibesafe.hashing import compute_dependency_digest, compute_spec_hash
 
 console = Console()
 
@@ -393,6 +393,182 @@ def diff(target: str | None) -> None:
         console.print("\n[green]No drift detected.[/green]")
 
 
+@main.command()
+@click.option("--target", help="Unit ID to open in the REPL")
+def repl(target: str | None) -> None:
+    """Interactive compile/test loop for a vibesafe unit."""
+
+    _import_project_modules()
+    registry = vibesafe.get_registry()
+
+    if not registry:
+        console.print("[yellow]No vibesafe units found in project.[/yellow]")
+        sys.exit(1)
+
+    if not target:
+        console.print("[red]Specify --target <unit_id> to open the REPL.[/red]")
+        console.print("Known units:")
+        for uid in sorted(registry):
+            console.print(f"  - {uid}")
+        sys.exit(1)
+
+    if target not in registry:
+        console.print(f"[red]Unknown unit: {target}[/red]")
+        console.print("Known units:")
+        for uid in sorted(registry):
+            console.print(f"  - {uid}")
+        sys.exit(1)
+
+    unit_meta = registry[target]
+
+    def _unit_hash_state() -> tuple[str, str, str]:
+        config = get_config()
+        provider_name = unit_meta.get("provider") or "default"
+        provider_cfg = config.get_provider(provider_name)
+        spec = extract_spec(unit_meta["func"])
+        dependency_digest = compute_dependency_digest(spec["dependencies"])
+        provider_params = {
+            "temperature": provider_cfg.temperature,
+            "seed": provider_cfg.seed,
+            "timeout": provider_cfg.timeout,
+        }
+        template_id = unit_meta.get("template", "prompts/function.j2")
+        current_hash = compute_spec_hash(
+            signature=spec["signature"],
+            docstring=spec["docstring"],
+            body_before_handled=spec["body_before_handled"],
+            template_id=template_id,
+            provider_model=provider_cfg.model,
+            provider_params=provider_params,
+            dependency_digest=dependency_digest,
+        )
+
+        config = get_config()
+        index_path = config.resolve_path(config.paths.index)
+        active_hash = "—"
+        created_at = "—"
+        if index_path.exists():
+            if sys.version_info >= (3, 11):
+                import tomllib
+            else:  # pragma: no cover
+                import tomli as tomllib  # type: ignore[misc]
+
+            with open(index_path, "rb") as fh:
+                index = tomllib.load(fh)
+                unit_entry = index.get(target, {})
+                active_hash = unit_entry.get("active", "—")
+                created_at = unit_entry.get("created", "—")
+
+        return current_hash, active_hash, created_at
+
+    def _show_summary() -> None:
+        spec = extract_spec(unit_meta["func"])
+        current_hash, active_hash, created_at = _unit_hash_state()
+
+        console.rule(f"Vibesafe REPL — {target}")
+        console.print(
+            f"[bold]Docstring lines:[/bold] {len(spec['docstring'].splitlines())} • "
+            f"[bold]Doctests:[/bold] {len(spec['doctests'])}"
+        )
+        first_doc_line = spec["docstring"].splitlines()[0] if spec["docstring"] else ""
+        if first_doc_line:
+            console.print(f"[italic]{first_doc_line}[/italic]")
+        console.print(
+            f"[bold]Current hash:[/bold] {current_hash}\n"
+            f"[bold]Active hash:[/bold] {active_hash}\n"
+            f"[bold]Last activated:[/bold] {created_at}"
+        )
+
+    def _generate(force: bool = False) -> None:
+        nonlocal unit_meta
+        console.print("\n[bold]Generating implementation...[/bold]")
+        try:
+            checkpoint_info = generate_for_unit(target, force=force)
+            update_index(
+                target,
+                checkpoint_info["spec_hash"],
+                created=checkpoint_info.get("created_at"),
+            )
+            shim_path = write_shim(target)
+            console.print(f"  ✓ spec hash {checkpoint_info['spec_hash'][:8]} • shim {shim_path}")
+        except Exception as exc:  # pragma: no cover - surfaced to CLI user
+            console.print(f"[red]✗ Generation failed: {exc}[/red]")
+            return
+
+        unit_meta = vibesafe.get_unit(target) or unit_meta
+        _run_tests()
+
+    def _run_tests() -> None:
+        console.print("\n[bold]Running tests...[/bold]")
+        result = test_unit(target)
+        if result:
+            console.print(f"[green]✓ {result.total} test(s) passed[/green]")
+        else:
+            console.print(f"[red]✗ {result.failures}/{result.total} failed[/red]")
+            for error in result.errors:
+                console.print(f"  • {error}")
+
+    def _show_diff() -> None:
+        current_hash, active_hash, created_at = _unit_hash_state()
+        if active_hash == "—":
+            console.print("[yellow]No active checkpoint yet.[/yellow]")
+            return
+        if active_hash == current_hash:
+            console.print(
+                f"[green]Hashes match.[/green] active={active_hash[:8]} (created {created_at})"
+            )
+        else:
+            console.print("[red]Drift detected.[/red]")
+            console.print(f"  active:  {active_hash}")
+            console.print(f"  current: {current_hash}")
+            console.print(f"  created: {created_at}")
+
+    def _print_help() -> None:
+        console.print(
+            "Commands: [bold]g[/bold]=generate, [bold]g![/bold]=force generate, "
+            "[bold]t[/bold]=test, [bold]s[/bold]=show, [bold]d[/bold]=diff, "
+            "[bold]q[/bold]=quit"
+        )
+
+    _show_summary()
+    _print_help()
+
+    while True:
+        try:
+            raw = console.input("\n[bold cyan]repl>[/bold cyan] ")
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[bold]Exiting REPL.[/bold]")
+            break
+
+        if raw is None:
+            continue
+
+        cmd = raw.strip().lower()
+        if not cmd:
+            continue
+
+        if cmd in {"q", "quit", "exit"}:
+            console.print("[bold]Bye![/bold]")
+            break
+
+        force = cmd.endswith("!")
+        if force:
+            cmd = cmd[:-1]
+
+        if cmd == "g":
+            _generate(force=force)
+        elif cmd == "t":
+            _run_tests()
+        elif cmd == "s":
+            _show_summary()
+        elif cmd == "d":
+            _show_diff()
+        elif cmd in {"?", "help", "h"}:
+            _print_help()
+        else:
+            console.print("[yellow]Unknown command. Type 'h' for help.[/yellow]")
+
+
 def _freeze_http_dependencies(units: list[str], config) -> None:
     """Capture dependency versions and update checkpoint metadata."""
 
@@ -403,8 +579,7 @@ def _freeze_http_dependencies(units: list[str], config) -> None:
         freeze_proc = subprocess.run(
             [sys.executable, "-m", "pip", "freeze"],
             check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
     except subprocess.CalledProcessError as exc:
@@ -475,7 +650,7 @@ def _write_deps_to_meta(meta_path: Path, deps: dict[str, str]) -> None:
 
     lines.append("[deps]")
     for name, version in sorted(deps.items()):
-        lines.append(f"{name} = \"{version}\"")
+        lines.append(f'{name} = "{version}"')
     lines.append("")
 
     meta_path.write_text("\n".join(lines))

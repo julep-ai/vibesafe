@@ -37,5 +37,5 @@ def word_frequency(text: str) -> dict[str, int]:
     {}
     """
     # Normalize text to lowercase for counting
-    normalized = text.lower()
+    text.lower()
     yield VibesafeHandled()

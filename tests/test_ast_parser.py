@@ -165,3 +165,29 @@ class TestExtractSpec:
 
         spec = extract_spec(tested_func)
         assert len(spec["doctests"]) == 1
+
+    def test_extract_spec_with_hypothesis_block(self, clear_defless_registry):
+        """Hypothesis fenced blocks are captured."""
+
+        @vibesafe.func
+        def property_func(x: int) -> int:
+            """Example with property.
+
+            >>> property_func(2)
+            2
+
+            ```hypothesis
+            from hypothesis import given, strategies as st
+
+            @given(st.integers())
+            def test_identity(n: int) -> None:
+                assert func(n) == n
+            ```
+            """
+
+            yield VibesafeHandled()
+
+        spec = extract_spec(property_func)
+        blocks = spec["hypothesis_blocks"]
+        assert len(blocks) == 1
+        assert "given(" in blocks[0]

@@ -135,14 +135,14 @@ def build_shim(unit_id: str) -> str:
     """
     func_name = unit_id.split("/")[-1]
 
-    return f'''# AUTO-GENERATED SHIM BY VIBESAFE
+    return f"""# AUTO-GENERATED SHIM BY VIBESAFE
 # Unit: {unit_id}
 # This file imports the active checkpoint implementation.
 
 from vibesafe.runtime import load_active
 
 {func_name} = load_active("{unit_id}")
-'''
+"""
 
 
 def write_shim(unit_id: str) -> Path:

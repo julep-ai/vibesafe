@@ -182,7 +182,7 @@ class TestGetProvider:
     @pytest.mark.unit
     def test_get_provider_unknown_kind_raises(self, temp_dir, monkeypatch):
         """Test that unknown provider kind raises error."""
-        from vibesafe.config import VibesafeConfig, ProviderConfig
+        from vibesafe.config import ProviderConfig, VibesafeConfig
 
         config = VibesafeConfig()
         config.provider["bad"] = ProviderConfig(kind="unknown-provider")
