@@ -21,9 +21,15 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pytest-xdist>=3.5.0",  # Parallel test execution
+    "pytest-cov>=5.0.0",     # Coverage reporting
+    "pytest-mock>=3.14.0",   # Mocking support
+    "pytest-asyncio>=0.23.0", # Async test support
+    "pytest-timeout>=2.3.0",  # Test timeouts
     "mypy>=1.11.0",
     "ruff>=0.6.0",
     "pyright>=1.1.0",
+    "anyio>=4.0.0",          # For async examples
 ]
 
 [project.scripts]
@@ -32,3 +38,40 @@ defless = "defless.cli:main"
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=src/defless",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "asyncio: marks tests as async",
+]
+
+[tool.coverage.run]
+source = ["src/defless"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+]

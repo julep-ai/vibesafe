@@ -59,7 +59,10 @@ def scan(write_shims: bool) -> None:
 
     active_units = {}
     if index_path.exists():
-        import tomllib if sys.version_info >= (3, 11) else tomli as tomllib
+        if sys.version_info >= (3, 11):
+            import tomllib
+        else:
+            import tomli as tomllib
 
         with open(index_path, "rb") as f:
             index = tomllib.load(f)
