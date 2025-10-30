@@ -26,6 +26,9 @@ class VibesafeHandled:
         return "VibesafeHandled()"
 
 
+VibeHandled = VibesafeHandled
+
+
 class VibesafeDecorator:
     """
     Main decorator class for marking functions and endpoints for code generation.
@@ -68,11 +71,12 @@ class VibesafeDecorator:
             unit_id = f"{module}/{qualname}"
 
             # Store metadata
+            default_template = "prompts/function.j2"
             self._registry[unit_id] = {
                 "type": "function",
                 "func": func,
                 "provider": provider,
-                "template": template or "function.j2",
+                "template": template or default_template,
                 "module": module,
                 "qualname": qualname,
             }
@@ -81,7 +85,7 @@ class VibesafeDecorator:
             func.__vibesafe_unit_id__ = unit_id  # type: ignore
             func.__vibesafe_type__ = "function"  # type: ignore
             func.__vibesafe_provider__ = provider  # type: ignore
-            func.__vibesafe_template__ = template or "function.j2"  # type: ignore
+            func.__vibesafe_template__ = template or default_template  # type: ignore
 
             @functools.wraps(func)
             def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
@@ -147,13 +151,14 @@ class VibesafeDecorator:
             unit_id = f"{module}/{qualname}"
 
             # Store metadata
+            default_template = "prompts/http_endpoint.j2"
             self._registry[unit_id] = {
                 "type": "http",
                 "func": func,
                 "method": method,
                 "path": path,
                 "provider": provider,
-                "template": template or "http_endpoint.j2",
+                "template": template or default_template,
                 "module": module,
                 "qualname": qualname,
             }
@@ -164,7 +169,7 @@ class VibesafeDecorator:
             func.__vibesafe_method__ = method  # type: ignore
             func.__vibesafe_path__ = path  # type: ignore
             func.__vibesafe_provider__ = provider  # type: ignore
-            func.__vibesafe_template__ = template or "http_endpoint.j2"  # type: ignore
+            func.__vibesafe_template__ = template or default_template  # type: ignore
 
             @functools.wraps(func)
             async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:

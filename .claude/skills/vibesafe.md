@@ -209,7 +209,7 @@ vibesafe save --target app.math.ops/fibonacci
 
 ## Using Generated Code
 
-### Import from __generated__
+### Import from __generated__ (Recommended)
 
 ```python
 # After compilation and successful tests
@@ -218,6 +218,29 @@ from __generated__.app.math.ops import fibonacci
 result = fibonacci(10)  # Uses AI-generated implementation
 print(f"fibonacci(10) = {result}")
 ```
+
+**Note:** `__generated__` shims may only contain one function at a time depending on when they were written. Use the runtime loader for reliable access to multiple functions.
+
+### Using the Runtime Loader (Most Reliable)
+
+```python
+# Import the loader
+from vibesafe.runtime import load_active
+
+# Load specific functions by unit ID
+multiply = load_active("test_vibesafe/multiply")
+factorial = load_active("test_vibesafe/factorial")
+
+# Use them
+print(multiply(5, 7))    # 35
+print(factorial(5))       # 120
+```
+
+**Advantages:**
+- Works for all compiled functions
+- No dependency on shim files
+- Direct access to active checkpoints
+- Better for programmatic usage
 
 ### Direct Usage in Application
 
@@ -228,6 +251,8 @@ from app.math.ops import fibonacci
 # When called, this loads the active checkpoint
 result = fibonacci(10)
 ```
+
+**Caveat:** This only works if the checkpoint has been saved/activated.
 
 ## Workflow Patterns
 
@@ -427,6 +452,49 @@ vibesafe test --target app.math.ops/fibonacci
 vibesafe save --target app.math.ops/fibonacci
 ```
 
+### "No vibesafe units found" When Running Scan
+
+**Problem:** `vibesafe scan` shows "No vibesafe units found" even though you have decorated functions
+
+**Root Cause:** The scan command only imports Python files from these directories:
+- `app/**/*.py`
+- `src/**/*.py`
+- `*.py` (root level)
+
+Files in other directories like `examples/`, `tests/`, or subdirectories won't be discovered.
+
+**Solutions:**
+1. **Move your specs** to one of the scanned directories (app/, src/, or root)
+2. **Create a root-level file** that imports your specs:
+```python
+# specs.py (in project root)
+from my_module.functions import *  # imports decorated functions
+```
+3. **Use PYTHONPATH** if files are elsewhere:
+```bash
+PYTHONPATH=examples vibesafe scan  # May not work in all cases
+```
+
+### Syntax Errors in Generated Code (Fixed in Latest Version)
+
+**Problem:** Tests fail with `invalid syntax (impl.py, line 1)` even though compilation succeeded
+
+**Root Cause (Fixed):** AI was returning code wrapped in markdown blocks (` ```python...``` `), which the older version didn't strip.
+
+**Solution:**
+- ✅ **This is now fixed** in the latest version (the code automatically strips markdown blocks)
+- If using an older version, manually remove markdown delimiters from `.vibesafe/checkpoints/*/impl.py`
+- Or update to the latest version with the fix
+
+**Manual Fix for Old Versions:**
+```bash
+# Find the impl.py file
+find .vibesafe -name "impl.py" -path "*your_function*"
+
+# Edit to remove ```python and ``` markers
+vim .vibesafe/checkpoints/.../impl.py
+```
+
 ### Tests Failing
 
 **Problem:** Generated code doesn't pass doctests
@@ -435,11 +503,22 @@ vibesafe save --target app.math.ops/fibonacci
 1. **Add more doctest examples** to clarify behavior
 2. **Improve docstring** to be more explicit
 3. **Add pre-VibesafeHandled setup** code to show context
-4. **Check doctest format** - must be exact
-5. **Force recompile** with different seed:
+4. **Check doctest format** - must be exact (including whitespace)
+5. **Inspect generated code** to see what AI created:
+```bash
+# Find and read the implementation
+find .vibesafe/checkpoints -name "impl.py" -path "*your_function*" -exec cat {} \;
+```
+6. **Force recompile** with different seed or clearer spec:
 ```toml
 [provider.default]
 seed = 43  # Try different seed
+```
+7. **Check doctest output format** - some types need special formatting:
+```python
+# For dicts, lists - order matters!
+>>> word_frequency("hello world hello")
+{'hello': 2, 'world': 1}  # Dict order may vary in Python <3.7
 ```
 
 ### Import Errors
@@ -550,8 +629,244 @@ vibesafe save --target module/func        # Activate
 from __generated__.module import func    # Use generated code
 ```
 
+## Tested Working Examples
+
+These examples have been tested and verified to work with vibesafe:
+
+### Simple Arithmetic
+
+```python
+from vibesafe import vibesafe, VibesafeHandled
+
+@vibesafe.func
+def multiply(a: int, b: int) -> int:
+    """
+    Multiply two integers.
+
+    >>> multiply(2, 3)
+    6
+    >>> multiply(5, 7)
+    35
+    >>> multiply(-3, 4)
+    -12
+    >>> multiply(0, 10)
+    0
+    """
+    yield VibesafeHandled()
+```
+
+**Generated Implementation:**
+```python
+def multiply(a: int, b: int) -> int:
+    return a * b
+```
+
+### Recursive Functions
+
+```python
+@vibesafe.func
+def factorial(n: int) -> int:
+    """
+    Calculate the factorial of a non-negative integer.
+
+    >>> factorial(0)
+    1
+    >>> factorial(1)
+    1
+    >>> factorial(5)
+    120
+    >>> factorial(7)
+    5040
+    """
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    yield VibesafeHandled()
+```
+
+**Generated Implementation:**
+```python
+def factorial(n: int) -> int:
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    result = 1
+    for i in range(2, n + 1):
+        result *= i
+    return result
+```
+
+### String Manipulation
+
+```python
+@vibesafe.func
+def reverse_string(text: str) -> str:
+    """
+    Reverse a string.
+
+    >>> reverse_string("hello")
+    'olleh'
+    >>> reverse_string("Python")
+    'nohtyP'
+    >>> reverse_string("12345")
+    '54321'
+    >>> reverse_string("")
+    ''
+    """
+    yield VibesafeHandled()
+```
+
+**Generated Implementation:**
+```python
+def reverse_string(text: str) -> str:
+    return text[::-1]
+```
+
+### List Generation
+
+```python
+@vibesafe.func
+def fibonacci_list(n: int) -> list[int]:
+    """
+    Generate list of first n Fibonacci numbers.
+
+    >>> fibonacci_list(5)
+    [0, 1, 1, 2, 3]
+    >>> fibonacci_list(10)
+    [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+    >>> fibonacci_list(1)
+    [0]
+    >>> fibonacci_list(0)
+    []
+    """
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    yield VibesafeHandled()
+```
+
+**Generated Implementation:**
+```python
+def fibonacci_list(n: int) -> list:
+    if n < 0:
+        raise ValueError("n must be non-negative")
+
+    fib_sequence = []
+    a, b = 0, 1
+
+    for _ in range(n):
+        fib_sequence.append(a)
+        a, b = b, a + b
+
+    return fib_sequence
+```
+
+### Dictionary Operations
+
+```python
+@vibesafe.func
+def word_frequency(text: str) -> dict[str, int]:
+    """
+    Count word frequency in text (case-insensitive).
+
+    >>> word_frequency("Hello world hello")
+    {'hello': 2, 'world': 1}
+    >>> word_frequency("The quick brown fox jumps over the lazy dog")
+    {'the': 2, 'quick': 1, 'brown': 1, 'fox': 1, 'jumps': 1, 'over': 1, 'lazy': 1, 'dog': 1}
+    >>> word_frequency("")
+    {}
+    """
+    # Normalize text to lowercase for counting
+    normalized = text.lower()
+    yield VibesafeHandled()
+```
+
+**Generated Implementation:**
+```python
+def word_frequency(text: str) -> dict[str, int]:
+    normalized = text.lower()
+
+    if not normalized.strip():
+        return {}
+
+    words = normalized.split()
+    frequency = {}
+
+    for word in words:
+        frequency[word] = frequency.get(word, 0) + 1
+
+    return frequency
+```
+
+### Complete Working Demo Script
+
+```python
+#!/usr/bin/env python3
+"""Demo script showing vibesafe-generated functions."""
+
+from vibesafe.runtime import load_active
+
+# Load AI-generated functions
+multiply = load_active("test_vibesafe/multiply")
+factorial = load_active("test_vibesafe/factorial")
+reverse_string = load_active("test_vibesafe/reverse_string")
+fibonacci_list = load_active("test_complex/fibonacci_list")
+word_frequency = load_active("test_complex/word_frequency")
+
+# Test them
+print("Arithmetic:", multiply(12, 8))           # 96
+print("Factorial:", factorial(6))                # 720
+print("Reverse:", reverse_string("Python"))     # nohtyP
+print("Fibonacci:", fibonacci_list(7))          # [0, 1, 1, 2, 3, 5, 8]
+print("Frequency:", word_frequency("hello world hello"))  # {'hello': 2, 'world': 1}
+```
+
+**Running the demo:**
+```bash
+# 1. Create specs with the functions above
+# 2. Compile them
+vibesafe compile
+
+# 3. Test them
+vibesafe test
+
+# 4. Run demo
+python demo.py
+```
+
+## Recent Improvements
+
+### Markdown Code Block Stripping (Latest)
+
+**What Changed:**
+- Added automatic stripping of markdown code blocks from AI-generated code
+- LLM responses wrapped in ` ```python...``` ` are now cleaned automatically
+- Prevents syntax errors in generated implementations
+
+**Implementation:**
+- New `_clean_generated_code()` method in `src/vibesafe/codegen.py`
+- Handles various markdown formats (```python, ```, with/without extra whitespace)
+- Preserves code with backticks in strings/docstrings
+
+**Test Coverage:**
+- Added comprehensive tests in `tests/test_codegen_markdown.py`
+- Tests markdown blocks, plain code, nested backticks, edge cases
+- All 7 markdown stripping tests pass
+
+**Impact:**
+- ✅ More reliable code generation
+- ✅ Works with various LLM response formats
+- ✅ Backward compatible (doesn't break existing functionality)
+- ✅ No manual cleanup needed after compilation
+
+### Known Limitations
+
+1. **Scan Discovery:** Only scans `app/`, `src/`, and root-level `.py` files
+2. **Shim Generation:** May overwrite existing shims (stores one function at a time)
+3. **Dict Ordering:** Doctest dict comparisons require consistent ordering
+4. **Stateful Functions:** Not recommended for functions with side effects
+
 ## Resources
 
 - Repository: https://github.com/julep-ai/vibesafe
 - Examples: See `examples/` directory
 - Templates: See `prompts/` directory
+- Issue Tracker: Report bugs and request features on GitHub
+- Documentation: This skill file is the most comprehensive guide

@@ -19,6 +19,7 @@ class SpecExtractor:
         # Dedent source to handle functions defined inside test methods
         self.source = textwrap.dedent(inspect.getsource(func))
         self.tree = ast.parse(self.source)
+        self.module = inspect.getmodule(func)
 
     def extract_signature(self) -> str:
         """
@@ -145,9 +146,40 @@ class SpecExtractor:
         Returns:
             Dictionary mapping name -> source code (if available)
         """
-        # For Phase 1, return empty dict (static analysis is complex)
-        # Phase 2 will implement hybrid tracing
-        return {}
+        body_code = self.extract_body_before_handled()
+        if not body_code or self.module is None:
+            return {}
+
+        try:
+            body_tree = ast.parse(textwrap.dedent(body_code))
+        except SyntaxError:
+            return {}
+
+        names: set[str] = set()
+
+        class _NameCollector(ast.NodeVisitor):
+            def visit_Name(self, node: ast.Name) -> None:  # type: ignore[override]
+                if isinstance(node.ctx, ast.Load):
+                    names.add(node.id)
+                self.generic_visit(node)
+
+        _NameCollector().visit(body_tree)
+
+        module_dict = getattr(self.module, "__dict__", {})
+        dependencies: dict[str, str] = {}
+
+        for name in sorted(names):
+            if name == self.func.__name__:
+                continue
+            if name in module_dict:
+                obj = module_dict[name]
+                try:
+                    source = inspect.getsource(obj)
+                except (OSError, TypeError):
+                    continue
+                dependencies[name] = textwrap.dedent(source).strip()
+
+        return dependencies
 
     def to_dict(self) -> dict[str, Any]:
         """

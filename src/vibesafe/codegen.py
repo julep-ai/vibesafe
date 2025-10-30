@@ -3,6 +3,9 @@ Code generation orchestration - prompt rendering and LLM calls.
 """
 
 import sys
+from datetime import datetime, timezone
+import platform
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +24,12 @@ from vibesafe.hashing import (
     compute_dependency_digest,
     compute_prompt_hash,
     compute_spec_hash,
+    hash_code,
+)
+from vibesafe.exceptions import (
+    VibesafeMissingDoctest,
+    VibesafeProviderError,
+    VibesafeValidationError,
 )
 from vibesafe.providers import get_provider
 
@@ -52,6 +61,11 @@ class CodeGenerator:
         Returns:
             Dictionary with checkpoint info (spec_hash, chk_hash, path, etc.)
         """
+        if not self.spec["doctests"]:
+            raise VibesafeMissingDoctest(
+                f"Spec {self.unit_id} does not declare any doctests; add at least one example."
+            )
+
         # Compute spec hash
         spec_hash = self._compute_spec_hash()
 
@@ -66,7 +80,8 @@ class CodeGenerator:
         prompt_hash = compute_prompt_hash(prompt)
 
         # Call LLM
-        generated_code = self._generate_code(prompt)
+        generated_code = self._generate_code(prompt, spec_hash)
+        self._validate_generated_code(generated_code)
 
         # Compute checkpoint hash
         chk_hash = compute_checkpoint_hash(spec_hash, prompt_hash, generated_code)
@@ -81,6 +96,11 @@ class CodeGenerator:
         template_id = self.unit_meta.get("template", "function.j2")
         provider_model = self.provider_config.model
         dependency_digest = compute_dependency_digest(self.spec["dependencies"])
+        provider_params = {
+            "temperature": self.provider_config.temperature,
+            "seed": self.provider_config.seed,
+            "timeout": self.provider_config.timeout,
+        }
 
         return compute_spec_hash(
             signature=self.spec["signature"],
@@ -88,6 +108,7 @@ class CodeGenerator:
             body_before_handled=self.spec["body_before_handled"],
             template_id=template_id,
             provider_model=provider_model,
+            provider_params=provider_params,
             dependency_digest=dependency_digest,
         )
 
@@ -131,10 +152,60 @@ class CodeGenerator:
 
         return template.render(**context)
 
-    def _generate_code(self, prompt: str) -> str:
+    def _generate_code(self, prompt: str, spec_hash: str) -> str:
         """Call LLM to generate code."""
         seed = self.provider_config.seed
-        return self.provider.complete(prompt=prompt, seed=seed)
+        try:
+            generated = self.provider.complete(prompt=prompt, seed=seed, spec_hash=spec_hash)
+        except Exception as exc:  # pragma: no cover - provider errors are environment-specific
+            raise VibesafeProviderError(f"Provider request failed: {exc}") from exc
+        return self._clean_generated_code(generated)
+
+    def _clean_generated_code(self, code: str) -> str:
+        """
+        Clean generated code by removing markdown code blocks and extra whitespace.
+
+        Args:
+            code: Raw generated code that may contain markdown formatting
+
+        Returns:
+            Clean Python code
+        """
+        # Remove markdown code blocks if present
+        lines = code.strip().split('\n')
+
+        # Check if the code is wrapped in markdown code blocks
+        if lines and lines[0].strip().startswith('```'):
+            # Find the start and end of the code block
+            start_idx = 1  # Skip the opening ```python or ```
+            end_idx = len(lines)
+
+            # Find the closing ```
+            for i in range(len(lines) - 1, 0, -1):
+                if lines[i].strip() == '```':
+                    end_idx = i
+                    break
+
+            # Extract just the code between the markers
+            code = '\n'.join(lines[start_idx:end_idx])
+
+        # Strip trailing whitespace from each line (for linting)
+        lines = code.strip().split('\n')
+        lines = [line.rstrip() for line in lines]
+        return '\n'.join(lines)
+
+    def _validate_generated_code(self, code: str) -> None:
+        """
+        Perform basic validation on generated code.
+
+        Ensures the implementation defines the expected function name.
+        """
+        func_name = self.func.__name__
+        signature_token = f"def {func_name}"
+        if signature_token not in code:
+            raise VibesafeValidationError(
+                f"Generated code for {self.unit_id} is missing definition '{signature_token}'."
+            )
 
     def _get_checkpoint_dir(self, spec_hash: str) -> Path:
         """Get checkpoint directory for a spec hash."""
@@ -152,24 +223,49 @@ class CodeGenerator:
 
         # Write implementation
         impl_path = checkpoint_dir / "impl.py"
-        impl_path.write_text(generated_code)
+        # Ensure code ends with a newline for linting
+        code_with_newline = generated_code if generated_code.endswith('\n') else generated_code + '\n'
+        impl_path.write_text(code_with_newline)
 
         # Write metadata
+        created_at = datetime.now(timezone.utc).isoformat()
         meta_path = checkpoint_dir / "meta.toml"
-        meta_content = f"""# Vibesafe checkpoint metadata
-spec_sha = "{spec_hash}"
-chk_sha = "{chk_hash}"
-prompt_sha = "{prompt_hash}"
-vibesafe_version = "{__version__}"
-provider = "{self.provider_config.kind}:{self.provider_config.model}"
-template = "{self.unit_meta.get("template", "function.j2")}"
+        template_id = self.unit_meta.get("template", "prompts/function.j2")
+        dependency_digest = compute_dependency_digest(self.spec["dependencies"])
+        signature_text = self.spec["signature"]
+        docstring_text = self.spec["docstring"] or ""
+        body_before = self.spec["body_before_handled"] or ""
+        meta_content = textwrap.dedent(
+            f"""\
+            # Vibesafe checkpoint metadata
+            created = "{created_at}"
+            python = "{platform.python_version()}"
+            env = "{self.config.project.env}"
+            spec_sha = "{spec_hash}"
+            chk_sha = "{chk_hash}"
+            prompt_sha = "{prompt_hash}"
+            vibesafe_version = "{__version__}"
+            provider = "{self.provider_config.kind}:{self.provider_config.model}"
+            template = "{template_id}"
+            provider_temperature = {self.provider_config.temperature}
+            provider_seed = {self.provider_config.seed}
+            provider_timeout = {self.provider_config.timeout}
 
-[signature]
-text = '''{self.spec["signature"]}'''
+            [hash_inputs]
+            signature_sha = "{hash_code(signature_text)}"
+            docstring_sha = "{hash_code(docstring_text)}"
+            body_sha = "{hash_code(body_before)}"
+            dependency_digest = "{dependency_digest}"
+            template_id = "{template_id}"
+            provider_model = "{self.provider_config.model}"
 
-[docstring]
-text = '''{self.spec["docstring"]}'''
-"""
+            [signature]
+            text = '''{signature_text}'''
+
+            [docstring]
+            text = '''{docstring_text}'''
+            """
+        )
         meta_path.write_text(meta_content)
 
         return {
@@ -179,6 +275,7 @@ text = '''{self.spec["docstring"]}'''
             "checkpoint_dir": checkpoint_dir,
             "impl_path": impl_path,
             "meta_path": meta_path,
+            "created_at": created_at,
         }
 
     def _load_checkpoint_meta(self, checkpoint_dir: Path) -> dict[str, Any]:

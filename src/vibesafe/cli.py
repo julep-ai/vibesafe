@@ -1,7 +1,6 @@
-"""
-CLI commands for vibesafe.
-"""
+"""CLI commands for vibesafe."""
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,6 +14,8 @@ from vibesafe.config import get_config
 from vibesafe.core import vibesafe
 from vibesafe.runtime import update_index, write_shim
 from vibesafe.testing import run_all_tests, test_unit
+from vibesafe.ast_parser import extract_spec
+from vibesafe.hashing import compute_dependency_digest, compute_spec_hash
 
 console = Console()
 
@@ -133,7 +134,11 @@ def compile(target: str | None, force: bool) -> None:
             console.print(f"  ✓ Generated checkpoint: {checkpoint_info['spec_hash'][:8]}")
 
             # Update index
-            update_index(unit_id, checkpoint_info["spec_hash"])
+            update_index(
+                unit_id,
+                checkpoint_info["spec_hash"],
+                created=checkpoint_info.get("created_at"),
+            )
             console.print("  ✓ Updated index")
 
             # Write shim
@@ -192,7 +197,12 @@ def test(target: str | None) -> None:
 
 @main.command()
 @click.option("--target", help="Specific unit ID to save")
-def save(target: str | None) -> None:
+@click.option(
+    "--freeze-http-deps",
+    is_flag=True,
+    help="Capture HTTP dependency versions into requirements.vibesafe.txt",
+)
+def save(target: str | None, freeze_http_deps: bool) -> None:
     """
     Save (activate) checkpoints after tests pass.
 
@@ -200,6 +210,7 @@ def save(target: str | None) -> None:
     """
     _import_project_modules()
 
+    registry = vibesafe.get_registry()
     if target:
         console.print(f"[bold]Saving {target}...[/bold]\n")
         result = test_unit(target)
@@ -211,6 +222,8 @@ def save(target: str | None) -> None:
             sys.exit(1)
 
         console.print("[green]✓ Tests passed, checkpoint is active[/green]")
+        if freeze_http_deps:
+            _freeze_http_dependencies([target], get_config())
     else:
         console.print("[bold]Testing all units before save...[/bold]\n")
         results = run_all_tests()
@@ -224,6 +237,248 @@ def save(target: str | None) -> None:
             sys.exit(1)
 
         console.print("[green]✓ All tests passed, all checkpoints are active[/green]")
+        if freeze_http_deps:
+            _freeze_http_dependencies(list(registry.keys()), get_config())
+
+
+@main.command()
+def status() -> None:
+    """Summarize registry state and checkpoint drift."""
+    _import_project_modules()
+
+    registry = vibesafe.get_registry()
+    if not registry:
+        console.print("[yellow]No vibesafe units found in project.[/yellow]")
+        return
+
+    config = get_config()
+    index_path = config.resolve_path(config.paths.index)
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:  # pragma: no cover
+        import tomli as tomllib  # type: ignore[misc]
+
+    index: dict[str, dict[str, str]] = {}
+    if index_path.exists():
+        with open(index_path, "rb") as fh:
+            index = tomllib.load(fh)
+
+    table = Table(title="Vibesafe Status")
+    table.add_column("Unit ID", style="cyan")
+    table.add_column("Type", style="green")
+    table.add_column("Active", overflow="fold")
+    table.add_column("Spec Hash", overflow="fold")
+    table.add_column("Status", style="magenta")
+
+    drift_count = 0
+
+    for unit_id, unit_meta in sorted(registry.items()):
+        provider_name = unit_meta.get("provider") or "default"
+        provider_cfg = config.get_provider(provider_name)
+        spec = extract_spec(unit_meta["func"])
+        dependency_digest = compute_dependency_digest(spec["dependencies"])
+        provider_params = {
+            "temperature": provider_cfg.temperature,
+            "seed": provider_cfg.seed,
+            "timeout": provider_cfg.timeout,
+        }
+        template_id = unit_meta.get("template", "prompts/function.j2")
+        current_hash = compute_spec_hash(
+            signature=spec["signature"],
+            docstring=spec["docstring"],
+            body_before_handled=spec["body_before_handled"],
+            template_id=template_id,
+            provider_model=provider_cfg.model,
+            provider_params=provider_params,
+            dependency_digest=dependency_digest,
+        )
+
+        unit_index = index.get(unit_id, {})
+        active_hash = unit_index.get("active", "—")
+
+        if not active_hash or active_hash == "—":
+            status = "⚠️  inactive"
+        elif active_hash == current_hash:
+            status = "✅ in sync"
+        else:
+            status = "⚠️  drift"
+            drift_count += 1
+
+        table.add_row(unit_id, unit_meta.get("type", "function"), active_hash, current_hash, status)
+
+    console.print(table)
+    console.print(
+        f"\n[bold]Units:[/bold] {len(registry)} • [bold yellow]drift[/bold yellow]: {drift_count}"
+    )
+
+
+@main.command()
+@click.option("--target", help="Specific unit ID to diff")
+def diff(target: str | None) -> None:
+    """Show spec hash drift compared to active checkpoints."""
+
+    _import_project_modules()
+    registry = vibesafe.get_registry()
+    if not registry:
+        console.print("[yellow]No vibesafe units found in project.[/yellow]")
+        return
+
+    config = get_config()
+    index_path = config.resolve_path(config.paths.index)
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:  # pragma: no cover
+        import tomli as tomllib  # type: ignore[misc]
+
+    index: dict[str, dict[str, str]] = {}
+    if index_path.exists():
+        with open(index_path, "rb") as fh:
+            index = tomllib.load(fh)
+
+    if target:
+        units = [uid for uid in registry if uid == target]
+        if not units:
+            console.print(f"[red]No unit found matching: {target}[/red]")
+            sys.exit(1)
+    else:
+        units = list(registry.keys())
+
+    drift_found = False
+    for unit_id in units:
+        unit_meta = registry[unit_id]
+        provider_name = unit_meta.get("provider") or "default"
+        provider_cfg = config.get_provider(provider_name)
+        spec = extract_spec(unit_meta["func"])
+        dependency_digest = compute_dependency_digest(spec["dependencies"])
+        provider_params = {
+            "temperature": provider_cfg.temperature,
+            "seed": provider_cfg.seed,
+            "timeout": provider_cfg.timeout,
+        }
+        template_id = unit_meta.get("template", "prompts/function.j2")
+        current_hash = compute_spec_hash(
+            signature=spec["signature"],
+            docstring=spec["docstring"],
+            body_before_handled=spec["body_before_handled"],
+            template_id=template_id,
+            provider_model=provider_cfg.model,
+            provider_params=provider_params,
+            dependency_digest=dependency_digest,
+        )
+
+        unit_index = index.get(unit_id, {})
+        active_hash = unit_index.get("active")
+        created_at = unit_index.get("created", "—")
+
+        if not active_hash:
+            console.print(f"[yellow]{unit_id}[/yellow]: no active checkpoint")
+            continue
+
+        if active_hash == current_hash:
+            console.print(f"[green]{unit_id}[/green]: hashes match ({active_hash[:8]})")
+            continue
+
+        drift_found = True
+        console.print(
+            f"[red]{unit_id}[/red]: drift detected\n"
+            f"  active:   {active_hash}\n"
+            f"  current:  {current_hash}\n"
+            f"  created:  {created_at}\n"
+            f"  checkpoint: {(config.resolve_path(config.paths.checkpoints) / unit_id.replace('.', '/') / active_hash[:16])}"
+        )
+
+    if not drift_found:
+        console.print("\n[green]No drift detected.[/green]")
+
+
+def _freeze_http_dependencies(units: list[str], config) -> None:
+    """Capture dependency versions and update checkpoint metadata."""
+
+    if not units:
+        return
+
+    try:
+        freeze_proc = subprocess.run(
+            [sys.executable, "-m", "pip", "freeze"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        output = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+        console.print(f"[red]✗ Failed to freeze dependencies: {output}[/red]")
+        return
+
+    requirements_path = Path.cwd() / "requirements.vibesafe.txt"
+    requirements_path.write_text(freeze_proc.stdout)
+    console.print(f"  ✓ Wrote dependency snapshot to {requirements_path}")
+
+    deps_of_interest: dict[str, str] = {}
+    for line in freeze_proc.stdout.splitlines():
+        if "==" not in line:
+            continue
+        name, version = line.split("==", 1)
+        normalized = name.lower()
+        if normalized in {"fastapi", "starlette", "pydantic", "httpx"}:
+            deps_of_interest[name] = version
+
+    if not deps_of_interest:
+        deps_of_interest["note"] = "dependencies captured in requirements.vibesafe.txt"
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:  # pragma: no cover
+        import tomli as tomllib  # type: ignore[misc]
+
+    index_path = config.resolve_path(config.paths.index)
+    if not index_path.exists():
+        console.print("[yellow]No index found; skipping meta updates.[/yellow]")
+        return
+
+    with open(index_path, "rb") as fh:
+        index = tomllib.load(fh)
+
+    checkpoints_base = config.resolve_path(config.paths.checkpoints)
+    for unit_id in units:
+        unit_index = index.get(unit_id)
+        if not unit_index:
+            continue
+        active_hash = unit_index.get("active")
+        if not active_hash:
+            continue
+        checkpoint_dir = checkpoints_base / unit_id.replace(".", "/") / active_hash[:16]
+        meta_path = checkpoint_dir / "meta.toml"
+        if not meta_path.exists():
+            continue
+
+        _write_deps_to_meta(meta_path, deps_of_interest)
+        console.print(f"  ✓ Updated dependencies in {meta_path}")
+
+
+def _write_deps_to_meta(meta_path: Path, deps: dict[str, str]) -> None:
+    """Ensure meta.toml contains a [deps] section with provided entries."""
+
+    lines = meta_path.read_text().splitlines()
+    start_idx = None
+    for idx, line in enumerate(lines):
+        if line.strip().startswith("[deps]"):
+            start_idx = idx
+            break
+
+    if start_idx is not None:
+        lines = lines[:start_idx]
+    if lines and lines[-1].strip():
+        lines.append("")
+
+    lines.append("[deps]")
+    for name, version in sorted(deps.items()):
+        lines.append(f"{name} = \"{version}\"")
+    lines.append("")
+
+    meta_path.write_text("\n".join(lines))
 
 
 def _import_project_modules() -> None:

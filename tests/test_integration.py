@@ -52,11 +52,19 @@ def multiply(a: int, b: int) -> int:
 
         checkpoint_info = generator.generate()
         assert checkpoint_info["impl_path"].exists()
+        meta_text = checkpoint_info["meta_path"].read_text()
+        assert "spec_sha" in meta_text
+        assert "provider_temperature" in meta_text
+        assert "signature_sha" in meta_text
 
         # Step 3: Update index
         from vibesafe.runtime import update_index
 
-        update_index(unit_id, checkpoint_info["spec_hash"])
+        update_index(
+            unit_id,
+            checkpoint_info["spec_hash"],
+            created=checkpoint_info["created_at"],
+        )
 
         # Step 4: Test implementation
         from vibesafe.testing import test_unit
@@ -284,9 +292,10 @@ class TestErrorHandling:
 
         config_module._config = test_config
 
-        from vibesafe.runtime import CheckpointNotFoundError, load_active
+        from vibesafe.exceptions import VibesafeCheckpointMissing
+        from vibesafe.runtime import load_active
 
-        with pytest.raises(CheckpointNotFoundError):
+        with pytest.raises(VibesafeCheckpointMissing):
             load_active("nonexistent/unit")
 
     def test_uncompiled_function_error(self, clear_defless_registry):

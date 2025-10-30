@@ -99,6 +99,44 @@ class TestTestCheckpoint:
         # Note: May fail if impl doesn't match, depends on sample_impl
         assert isinstance(result, TestResult)
 
+    def test_checkpoint_gates_failure(
+        self, checkpoint_dir, clear_defless_registry, monkeypatch
+    ):
+        """Gate failures should surface as test failures."""
+
+        @vibesafe.func
+        def gated_func(a: int) -> int:
+            """
+            Example with doctest.
+
+            >>> gated_func(1)
+            1
+            """
+            yield VibesafeHandled()
+
+        impl_path = checkpoint_dir / "impl.py"
+        impl_path.write_text(
+            """
+def gated_func(a: int) -> int:
+    return a
+""".strip()
+        )
+
+        unit_meta = {
+            "func": gated_func,
+            "module": "test",
+            "qualname": "gated_func",
+        }
+
+        monkeypatch.setattr(
+            "vibesafe.testing._run_quality_gates",
+            lambda path: ["ruff failed: example"],
+        )
+
+        result = test_checkpoint(checkpoint_dir, unit_meta)
+        assert not result.passed
+        assert any("ruff failed" in err for err in result.errors)
+
 
 class TestTestUnit:
     """Tests for test_unit function."""

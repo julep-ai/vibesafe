@@ -3,6 +3,7 @@ Shared pytest fixtures for vibesafe tests.
 """
 
 from collections.abc import Callable
+import importlib
 from pathlib import Path
 from typing import Any
 
@@ -196,6 +197,12 @@ text = '''Add two numbers.'''
 @pytest.fixture
 def clear_defless_registry():
     """Clear vibesafe registry between tests."""
+    # Ensure default example modules are registered once so the baseline registry matches docs
+    if not getattr(clear_defless_registry, "_seeded", False):
+        for module in ("examples.math.ops", "examples.api.routes"):
+            importlib.import_module(module)
+        clear_defless_registry._seeded = True
+
     # Store original registry
     original = vibesafe._registry.copy()
     vibesafe._registry.clear()

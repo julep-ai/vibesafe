@@ -85,7 +85,11 @@ class MCPServer:
 
         try:
             checkpoint_info = generate_for_unit(target, force=force)
-            update_index(target, checkpoint_info["spec_hash"])
+            update_index(
+                target,
+                checkpoint_info["spec_hash"],
+                created=checkpoint_info.get("created_at"),
+            )
             shim_path = write_shim(target)
 
             return {
