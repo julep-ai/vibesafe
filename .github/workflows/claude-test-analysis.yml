@@ -1,0 +1,216 @@
+name: Claude Test Failure Analysis
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  analyze-failures:
+    name: Analyze Test Failures with Claude
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download workflow logs
+        uses: actions/github-script@v7
+        id: download-logs
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Get the workflow run
+            const run = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id,
+            });
+
+            // Get jobs for this run
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id,
+            });
+
+            // Find failed jobs
+            const failedJobs = jobs.data.jobs.filter(job => job.conclusion === 'failure');
+
+            if (failedJobs.length === 0) {
+              console.log('No failed jobs found');
+              return JSON.stringify({ failed: false });
+            }
+
+            // Get logs for failed jobs
+            let failureSummary = `## Failed Jobs\n\n`;
+            for (const job of failedJobs.slice(0, 3)) {  // Limit to first 3 failed jobs
+              failureSummary += `### ${job.name}\n\n`;
+
+              // Get job logs
+              try {
+                const logs = await github.rest.actions.downloadJobLogsForWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  job_id: job.id,
+                });
+
+                // Extract relevant failure info (last 1000 chars)
+                const logText = logs.data.toString();
+                const relevantLog = logText.slice(-2000);
+                failureSummary += `\`\`\`\n${relevantLog}\n\`\`\`\n\n`;
+              } catch (e) {
+                failureSummary += `Could not retrieve logs: ${e.message}\n\n`;
+              }
+            }
+
+            fs.writeFileSync('failure-summary.txt', failureSummary);
+            return JSON.stringify({ failed: true, count: failedJobs.length });
+
+      - name: Analyze with Claude
+        if: steps.download-logs.outputs.result != ''
+        id: claude-analysis
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ ! -f failure-summary.txt ]; then
+            echo "No failure summary found"
+            exit 0
+          fi
+
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "⚠️ ANTHROPIC_API_KEY not set - skipping Claude analysis"
+            exit 0
+          fi
+
+          python3 << 'PYTHON_SCRIPT'
+          import os
+          import json
+          import urllib.request
+          import urllib.error
+
+          api_key = os.environ.get('ANTHROPIC_API_KEY')
+          if not api_key:
+              print("⚠️ ANTHROPIC_API_KEY not set")
+              exit(0)
+
+          # Read failure summary
+          try:
+              with open('failure-summary.txt', 'r') as f:
+                  failures = f.read()
+          except FileNotFoundError:
+              print("No failure summary found")
+              exit(0)
+
+          if len(failures) > 40000:
+              failures = failures[-40000:]
+
+          prompt = f"""You are analyzing test failures for the Defless project - an AI-powered code generation system.
+
+          Please analyze the following test failures and provide:
+          1. Root cause analysis (what likely caused the failure)
+          2. Specific steps to debug or fix the issue
+          3. Whether this appears to be a flaky test, environment issue, or real bug
+          4. Priority level (high/medium/low)
+
+          Be specific and actionable. Focus on helping developers quickly resolve the issue.
+
+          Test Failures:
+          {failures}
+
+          Provide your analysis in markdown format with clear sections."""
+
+          data = {
+              "model": "claude-sonnet-4-20250514",
+              "max_tokens": 2000,
+              "messages": [
+                  {
+                      "role": "user",
+                      "content": prompt
+                  }
+              ]
+          }
+
+          req = urllib.request.Request(
+              "https://api.anthropic.com/v1/messages",
+              data=json.dumps(data).encode('utf-8'),
+              headers={
+                  "Content-Type": "application/json",
+                  "anthropic-version": "2023-06-01",
+                  "x-api-key": api_key
+              }
+          )
+
+          try:
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  result = json.loads(response.read().decode('utf-8'))
+                  analysis = result['content'][0]['text']
+
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"analysis<<EOF\n{analysis}\nEOF\n")
+
+                  print("✅ Claude analysis completed")
+          except Exception as e:
+              print(f"❌ Error: {str(e)}")
+              exit(1)
+          PYTHON_SCRIPT
+
+      - name: Post analysis comment
+        if: steps.claude-analysis.outputs.analysis != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const analysis = `## 🔍 Claude Test Failure Analysis
+
+            ${{ steps.claude-analysis.outputs.analysis }}
+
+            ---
+            *Workflow Run: [#${{ github.event.workflow_run.run_number }}](${{ github.event.workflow_run.html_url }})*
+            *Automated analysis powered by Claude Sonnet 4*`;
+
+            // Find the PR associated with this workflow run
+            const pulls = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.payload.workflow_run.head_sha,
+            });
+
+            if (pulls.data.length > 0) {
+              const pr = pulls.data[0];
+
+              // Check for existing analysis comment
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+              });
+
+              const botComment = comments.data.find(comment =>
+                comment.user.type === 'Bot' &&
+                comment.body.includes('🔍 Claude Test Failure Analysis')
+              );
+
+              if (botComment) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: analysis
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  body: analysis
+                });
+              }
+            } else {
+              console.log('No PR found for this commit');
+            }

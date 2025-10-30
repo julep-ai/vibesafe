@@ -1,0 +1,166 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  claude-review:
+    name: Automated Code Review with Claude
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR diff
+        id: pr-diff
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+          DIFF=$(git diff origin/${{ github.event.pull_request.base.ref }}...HEAD)
+          echo "diff<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Get changed files
+        id: changed-files
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+          FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD | head -20)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Review code with Claude
+        id: claude-review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 << 'PYTHON_SCRIPT'
+          import os
+          import json
+          import urllib.request
+          import urllib.error
+
+          api_key = os.environ.get('ANTHROPIC_API_KEY')
+          if not api_key:
+              print("⚠️ ANTHROPIC_API_KEY not set - skipping Claude review")
+              exit(0)
+
+          # Read diff from environment
+          diff = """${{ steps.pr-diff.outputs.diff }}"""
+
+          if len(diff) > 50000:
+              diff = diff[:50000] + "\n\n... (diff truncated)"
+
+          prompt = f"""You are reviewing a pull request for the Defless project - an AI-powered code generation system with hash-locked verification.
+
+          Please review the following code changes and provide:
+          1. A brief summary of the changes (2-3 sentences)
+          2. Key observations about code quality, potential issues, or improvements
+          3. Security or performance concerns (if any)
+          4. Suggestions for improvement (if any)
+
+          Be constructive and concise. Focus on significant issues, not nitpicks.
+
+          Pull Request Title: ${{ github.event.pull_request.title }}
+
+          Changed files:
+          ${{ steps.changed-files.outputs.files }}
+
+          Diff:
+          ```diff
+          {diff}
+          ```
+
+          Provide your review in markdown format."""
+
+          # Call Claude API
+          data = {
+              "model": "claude-sonnet-4-20250514",
+              "max_tokens": 2000,
+              "messages": [
+                  {
+                      "role": "user",
+                      "content": prompt
+                  }
+              ]
+          }
+
+          req = urllib.request.Request(
+              "https://api.anthropic.com/v1/messages",
+              data=json.dumps(data).encode('utf-8'),
+              headers={
+                  "Content-Type": "application/json",
+                  "anthropic-version": "2023-06-01",
+                  "x-api-key": api_key
+              }
+          )
+
+          try:
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  result = json.loads(response.read().decode('utf-8'))
+                  review = result['content'][0]['text']
+
+                  # Save review to output
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"review<<EOF\n{review}\nEOF\n")
+
+                  print("✅ Claude review completed successfully")
+          except urllib.error.HTTPError as e:
+              error_body = e.read().decode('utf-8')
+              print(f"❌ API Error: {e.code} - {error_body}")
+              exit(1)
+          except Exception as e:
+              print(f"❌ Error: {str(e)}")
+              exit(1)
+          PYTHON_SCRIPT
+
+      - name: Post review comment
+        if: steps.claude-review.outputs.review != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const review = `## 🤖 Claude Code Review
+
+            ${{ steps.claude-review.outputs.review }}
+
+            ---
+            *Automated review powered by Claude Sonnet 4 • [Learn more about Claude](https://claude.ai)*`;
+
+            // Check if we already posted a review
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('🤖 Claude Code Review')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: review
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: review
+              });
+            }

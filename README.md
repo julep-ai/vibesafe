@@ -195,12 +195,48 @@ uv pip install -e ".[dev]"
 # Run tests
 pytest
 
+# Run tests in parallel
+pytest -n auto
+
 # Type checking
 mypy src/defless
 
 # Linting
 ruff check src/defless
+
+# Format code
+ruff format src/defless
 ```
+
+## CI/CD
+
+The repository uses GitHub Actions for continuous integration:
+
+### Standard CI Pipeline
+- **Linting**: Runs `ruff` to check code style and quality
+- **Type Checking**: Runs `mypy` for static type analysis
+- **Testing**: Runs `pytest` with parallel execution and coverage reporting
+- **Matrix Testing**: Tests on Python 3.12 and 3.13
+
+### Claude-Powered Automation
+
+This repository includes AI-powered code review and test analysis:
+
+- **Automated Code Review**: Claude Sonnet 4 reviews all PRs, providing:
+  - Summary of changes
+  - Code quality feedback
+  - Security and performance concerns
+  - Actionable suggestions
+
+- **Test Failure Analysis**: When tests fail, Claude analyzes the failure and provides:
+  - Root cause analysis
+  - Debugging steps
+  - Classification (bug vs. flaky test vs. environment issue)
+  - Priority assessment
+
+**Setup:** See [`.github/CLAUDE_ACTIONS.md`](.github/CLAUDE_ACTIONS.md) for configuration instructions.
+
+**Requirements:** Set `ANTHROPIC_API_KEY` in repository secrets.
 
 ## License
 
