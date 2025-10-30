@@ -85,8 +85,8 @@ class CachedProvider:
         Returns:
             Generated text (from cache if available)
         """
-        # Compute cache key from prompt + seed + kwargs
-        cache_key = self._compute_cache_key(prompt, seed, kwargs)
+        kwargs_copy = dict(kwargs)
+        cache_key = self._compute_cache_key(prompt, seed, kwargs_copy)
         cache_file = self.cache_dir / f"{cache_key}.json"
 
         # Check cache
@@ -95,14 +95,15 @@ class CachedProvider:
                 data = json.load(f)
                 return data["completion"]
 
-        # Generate
-        completion = self.provider.complete(prompt=prompt, seed=seed, **kwargs)
+        # Generate (use kwargs_copy which has spec_hash removed)
+        completion = self.provider.complete(prompt=prompt, seed=seed, **kwargs_copy)
 
         # Save to cache
         with open(cache_file, "w") as f:
             json.dump(
                 {
                     "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest()[:8],
+                    "spec_hash": kwargs.get("spec_hash"),
                     "seed": seed,
                     "completion": completion,
                 },
@@ -116,7 +117,12 @@ class CachedProvider:
         self, prompt: str, seed: int, kwargs: dict[str, str | int | float]
     ) -> str:
         """Compute cache key from inputs."""
-        key_data = f"{prompt}\n{seed}\n{json.dumps(kwargs, sort_keys=True)}"
+        spec_hash = kwargs.pop("spec_hash", None)
+        if spec_hash:
+            key_data = f"{spec_hash}\n{seed}\n{json.dumps(kwargs, sort_keys=True)}"
+        else:
+            prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+            key_data = f"{prompt_hash}\n{seed}\n{json.dumps(kwargs, sort_keys=True)}"
         return hashlib.sha256(key_data.encode()).hexdigest()[:16]
 
 

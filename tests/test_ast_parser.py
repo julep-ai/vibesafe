@@ -1,9 +1,12 @@
-"""
-Tests for vibesafe.ast_parser module.
-"""
+"""Tests for vibesafe.ast_parser module."""
 
 from vibesafe import VibesafeHandled, vibesafe
 from vibesafe.ast_parser import SpecExtractor, extract_spec
+
+
+def helper_dependency(value: int) -> int:
+    """Helper function for dependency extraction tests."""
+    return value + 1
 
 
 class TestSpecExtractor:
@@ -98,14 +101,16 @@ class TestSpecExtractor:
     def test_extract_dependencies(self, clear_defless_registry):
         """Test extracting dependencies."""
 
+        @vibesafe.func
         def dep_func(x: int) -> int:
             """Test."""
+            helper_dependency(x)
             yield VibesafeHandled()
 
         extractor = SpecExtractor(dep_func)
         deps = extractor.extract_dependencies()
-        # Phase 1: returns empty dict
-        assert isinstance(deps, dict)
+        assert "helper_dependency" in deps
+        assert "return value + 1" in deps["helper_dependency"]
 
     def test_to_dict(self, clear_defless_registry):
         """Test converting extraction to dictionary."""
@@ -160,3 +165,29 @@ class TestExtractSpec:
 
         spec = extract_spec(tested_func)
         assert len(spec["doctests"]) == 1
+
+    def test_extract_spec_with_hypothesis_block(self, clear_defless_registry):
+        """Hypothesis fenced blocks are captured."""
+
+        @vibesafe.func
+        def property_func(x: int) -> int:
+            """Example with property.
+
+            >>> property_func(2)
+            2
+
+            ```hypothesis
+            from hypothesis import given, strategies as st
+
+            @given(st.integers())
+            def test_identity(n: int) -> None:
+                assert func(n) == n
+            ```
+            """
+
+            yield VibesafeHandled()
+
+        spec = extract_spec(property_func)
+        blocks = spec["hypothesis_blocks"]
+        assert len(blocks) == 1
+        assert "given(" in blocks[0]

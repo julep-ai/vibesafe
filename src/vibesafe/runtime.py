@@ -14,18 +14,10 @@ else:
     import tomli as tomllib
 
 from vibesafe.config import get_config
-
-
-class CheckpointNotFoundError(Exception):
-    """Raised when no active checkpoint is found for a unit."""
-
-    pass
-
-
-class HashMismatchError(Exception):
-    """Raised when checkpoint hash verification fails."""
-
-    pass
+from vibesafe.exceptions import (
+    VibesafeCheckpointMissing,
+    VibesafeHashMismatch,
+)
 
 
 def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
@@ -40,15 +32,15 @@ def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
         Callable implementation
 
     Raises:
-        CheckpointNotFoundError: If no active checkpoint found
-        HashMismatchError: If hash verification fails
+        VibesafeCheckpointMissing: If no active checkpoint found
+        VibesafeHashMismatch: If hash verification fails
     """
     config = get_config()
 
     # Load index to get active spec hash
     index_path = config.resolve_path(config.paths.index)
     if not index_path.exists():
-        raise CheckpointNotFoundError(f"No index found at {index_path}")
+        raise VibesafeCheckpointMissing(f"No index found at {index_path}")
 
     with open(index_path, "rb") as f:
         index = tomllib.load(f)
@@ -56,11 +48,11 @@ def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
     # Get active hash for this unit
     unit_index = index.get(unit_id)
     if not unit_index:
-        raise CheckpointNotFoundError(f"No active checkpoint for unit: {unit_id}")
+        raise VibesafeCheckpointMissing(f"No active checkpoint for unit: {unit_id}")
 
     active_hash = unit_index.get("active")
     if not active_hash:
-        raise CheckpointNotFoundError(f"No active hash in index for unit: {unit_id}")
+        raise VibesafeCheckpointMissing(f"No active hash in index for unit: {unit_id}")
 
     # Get checkpoint directory
     checkpoints_base = config.resolve_path(config.paths.checkpoints)
@@ -68,12 +60,12 @@ def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
     checkpoint_dir = checkpoints_base / unit_path / active_hash[:16]
 
     if not checkpoint_dir.exists():
-        raise CheckpointNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
+        raise VibesafeCheckpointMissing(f"Checkpoint directory not found: {checkpoint_dir}")
 
     # Load implementation
     impl_path = checkpoint_dir / "impl.py"
     if not impl_path.exists():
-        raise CheckpointNotFoundError(f"Implementation not found: {impl_path}")
+        raise VibesafeCheckpointMissing(f"Implementation not found: {impl_path}")
 
     # Verify hash if requested
     if verify_hash and config.project.env == "prod":
@@ -90,7 +82,7 @@ def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
     spec.loader.exec_module(module)
 
     # Get function (last part of unit_id after /)
-    func_name = unit_id.split("/")[-1]
+    func_name = unit_id.split("/")[-1].split(".")[-1]
     if not hasattr(module, func_name):
         raise AttributeError(f"Function {func_name} not found in generated module {impl_path}")
 
@@ -126,7 +118,7 @@ def _verify_checkpoint_hash(checkpoint_dir: Path, impl_path: Path) -> None:
     computed_chk_hash = compute_checkpoint_hash(spec_hash, prompt_hash, generated_code)
 
     if computed_chk_hash != stored_chk_hash:
-        raise HashMismatchError(
+        raise VibesafeHashMismatch(
             f"Checkpoint hash mismatch! Expected {stored_chk_hash}, got {computed_chk_hash}"
         )
 
@@ -143,14 +135,14 @@ def build_shim(unit_id: str) -> str:
     """
     func_name = unit_id.split("/")[-1]
 
-    return f'''# AUTO-GENERATED SHIM BY VIBESAFE
+    return f"""# AUTO-GENERATED SHIM BY VIBESAFE
 # Unit: {unit_id}
 # This file imports the active checkpoint implementation.
 
 from vibesafe.runtime import load_active
 
 {func_name} = load_active("{unit_id}")
-'''
+"""
 
 
 def write_shim(unit_id: str) -> Path:
@@ -184,7 +176,7 @@ def write_shim(unit_id: str) -> Path:
     return shim_path
 
 
-def update_index(unit_id: str, active_hash: str) -> None:
+def update_index(unit_id: str, active_hash: str, *, created: str | None = None) -> None:
     """
     Update index.toml with active checkpoint for a unit.
 
@@ -208,6 +200,8 @@ def update_index(unit_id: str, active_hash: str) -> None:
         index[unit_id] = {}
 
     index[unit_id]["active"] = active_hash
+    if created:
+        index[unit_id]["created"] = created
 
     # Write back
     index_path.parent.mkdir(parents=True, exist_ok=True)
@@ -221,3 +215,8 @@ def update_index(unit_id: str, active_hash: str) -> None:
             for key, value in data.items():
                 f.write(f'{key} = "{value}"\n')
             f.write("\n")
+
+
+# Backwards compatibility exports
+CheckpointNotFoundError = VibesafeCheckpointMissing
+HashMismatchError = VibesafeHashMismatch

@@ -11,13 +11,8 @@ if sys.version_info >= (3, 11):
 else:
     pass
 
-from vibesafe.runtime import (
-    CheckpointNotFoundError,
-    build_shim,
-    load_active,
-    update_index,
-    write_shim,
-)
+from vibesafe.exceptions import VibesafeCheckpointMissing, VibesafeHashMismatch
+from vibesafe.runtime import build_shim, load_active, update_index, write_shim
 
 
 class TestLoadActive:
@@ -30,7 +25,7 @@ class TestLoadActive:
 
         config_module._config = test_config
 
-        with pytest.raises(CheckpointNotFoundError, match="No index found"):
+        with pytest.raises(VibesafeCheckpointMissing, match="No index found"):
             load_active("test/unit")
 
     def test_load_active_no_unit_in_index_raises(self, test_config, temp_dir, monkeypatch):
@@ -44,7 +39,7 @@ class TestLoadActive:
 
         config_module._config = test_config
 
-        with pytest.raises(CheckpointNotFoundError, match="No active checkpoint"):
+        with pytest.raises(VibesafeCheckpointMissing, match="No active checkpoint"):
             load_active("test/unit")
 
     def test_load_active_missing_checkpoint_dir_raises(self, test_config, temp_dir, monkeypatch):
@@ -58,7 +53,7 @@ class TestLoadActive:
 
         config_module._config = test_config
 
-        with pytest.raises(CheckpointNotFoundError, match="Checkpoint directory"):
+        with pytest.raises(VibesafeCheckpointMissing, match="Checkpoint directory"):
             load_active("test/unit")
 
     def test_load_active_success(
@@ -84,6 +79,34 @@ class TestLoadActive:
         func = load_active("test/func", verify_hash=False)
         result = func(2, 3)
         assert result == 5
+
+    def test_load_active_hash_mismatch(
+        self, test_config, temp_dir, checkpoint_dir, sample_impl, sample_meta, monkeypatch
+    ):
+        """Hash mismatches in prod mode should raise VibesafeHashMismatch."""
+
+        index_path = temp_dir / ".vibesafe" / "index.toml"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text('["test/func"]\nactive = "abc123"\n')
+
+        dest_checkpoint = temp_dir / ".vibesafe" / "checkpoints" / "test" / "func" / "abc123"
+        dest_checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        sample_impl.rename(dest_checkpoint / "impl.py")
+        meta_path = dest_checkpoint / "meta.toml"
+        sample_meta.rename(meta_path)
+
+        # Corrupt checksum so verification fails
+        meta_text = meta_path.read_text().replace('chk_sha = "def456ghi789"', 'chk_sha = "bogus"')
+        meta_path.write_text(meta_text)
+
+        monkeypatch.chdir(temp_dir)
+        from vibesafe import config as config_module
+
+        test_config.project.env = "prod"
+        config_module._config = test_config
+
+        with pytest.raises(VibesafeHashMismatch):
+            load_active("test/func")
 
 
 class TestBuildShim:
@@ -202,3 +225,19 @@ active = "hash2"
         assert "new_hash1" in content
         assert "unit2/func" in content
         assert "hash2" in content
+
+    def test_update_index_records_created(self, test_config, temp_dir, monkeypatch):
+        """Test that update_index persists created timestamp when provided."""
+        monkeypatch.chdir(temp_dir)
+        from vibesafe import config as config_module
+
+        config_module._config = test_config
+
+        created_at = "2025-10-30T12:00:00Z"
+        update_index("unit/func", "hash123", created=created_at)
+
+        index_path = temp_dir / ".vibesafe" / "index.toml"
+        content = index_path.read_text()
+        assert "unit/func" in content
+        assert "hash123" in content
+        assert f'created = "{created_at}"' in content

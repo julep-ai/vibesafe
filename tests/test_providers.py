@@ -79,7 +79,7 @@ class TestCachedProvider:
         base_provider.complete.return_value = "Generated result"
 
         cached = CachedProvider(base_provider, temp_dir)
-        result = cached.complete(prompt="Test prompt", seed=42)
+        result = cached.complete(prompt="Test prompt", seed=42, spec_hash="hash1")
 
         assert result == "Generated result"
         base_provider.complete.assert_called_once()
@@ -92,28 +92,42 @@ class TestCachedProvider:
         cached = CachedProvider(base_provider, temp_dir)
 
         # First call - cache miss
-        result1 = cached.complete(prompt="Test", seed=42)
+        result1 = cached.complete(prompt="Test", seed=42, spec_hash="hash1")
         assert result1 == "First result"
         assert base_provider.complete.call_count == 1
 
         # Second call - cache hit
         base_provider.complete.return_value = "Different result"
-        result2 = cached.complete(prompt="Test", seed=42)
+        result2 = cached.complete(prompt="Test", seed=42, spec_hash="hash1")
         assert result2 == "First result"  # Should be cached
         assert base_provider.complete.call_count == 1  # No new calls
 
-    def test_different_prompts_different_cache(self, temp_dir: Path, mocker):
-        """Test that different prompts use different cache entries."""
+    def test_same_spec_hash_different_prompt_hits_cache(self, temp_dir: Path, mocker):
+        """Different prompts with same spec_hash reuse cache entry."""
         base_provider = mocker.MagicMock()
-        base_provider.complete.side_effect = ["Result 1", "Result 2"]
+        base_provider.complete.return_value = "Result"
 
         cached = CachedProvider(base_provider, temp_dir)
 
-        result1 = cached.complete(prompt="Prompt 1", seed=42)
-        result2 = cached.complete(prompt="Prompt 2", seed=42)
+        result1 = cached.complete(prompt="Prompt 1", seed=42, spec_hash="spec123")
+        result2 = cached.complete(prompt="Prompt 2", seed=42, spec_hash="spec123")
 
-        assert result1 == "Result 1"
-        assert result2 == "Result 2"
+        assert result1 == "Result"
+        assert result2 == "Result"
+        assert base_provider.complete.call_count == 1
+
+    def test_different_spec_hashes_different_cache(self, temp_dir: Path, mocker):
+        """Different spec hashes should create distinct cache entries."""
+        base_provider = mocker.MagicMock()
+        base_provider.complete.side_effect = ["Spec A", "Spec B"]
+
+        cached = CachedProvider(base_provider, temp_dir)
+
+        result1 = cached.complete(prompt="Prompt", seed=42, spec_hash="specA")
+        result2 = cached.complete(prompt="Prompt", seed=42, spec_hash="specB")
+
+        assert result1 == "Spec A"
+        assert result2 == "Spec B"
         assert base_provider.complete.call_count == 2
 
     def test_cache_file_format(self, temp_dir: Path, mocker):
@@ -122,7 +136,7 @@ class TestCachedProvider:
         base_provider.complete.return_value = "Cached result"
 
         cached = CachedProvider(base_provider, temp_dir)
-        cached.complete(prompt="Test", seed=42)
+        cached.complete(prompt="Test", seed=42, spec_hash="hash-file")
 
         # Find cache file
         cache_files = list(temp_dir.glob("*.json"))
@@ -133,8 +147,8 @@ class TestCachedProvider:
             data = json.load(f)
             assert "completion" in data
             assert data["completion"] == "Cached result"
-            assert "seed" in data
             assert data["seed"] == 42
+            assert data["spec_hash"] == "hash-file"
 
 
 class TestGetProvider:
@@ -168,7 +182,7 @@ class TestGetProvider:
     @pytest.mark.unit
     def test_get_provider_unknown_kind_raises(self, temp_dir, monkeypatch):
         """Test that unknown provider kind raises error."""
-        from vibesafe.config import VibesafeConfig, ProviderConfig
+        from vibesafe.config import ProviderConfig, VibesafeConfig
 
         config = VibesafeConfig()
         config.provider["bad"] = ProviderConfig(kind="unknown-provider")

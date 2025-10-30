@@ -14,6 +14,7 @@ def compute_spec_hash(
     body_before_handled: str,
     template_id: str,
     provider_model: str,
+    provider_params: dict[str, str | int | float] | None = None,
     dependency_digest: str = "",
 ) -> str:
     """
@@ -47,6 +48,7 @@ def compute_spec_hash(
         __version__,
         template_id,
         provider_model,
+        _serialize_provider_params(provider_params),
         dependency_digest,
     ]
 
@@ -102,6 +104,27 @@ def compute_dependency_digest(dependencies: dict[str, str]) -> str:
     sorted_deps = sorted(dependencies.items())
     combined = "\n".join(f"{name}:\n{source}" for name, source in sorted_deps)
     return hashlib.sha256(combined.encode("utf-8")).hexdigest()
+
+
+def _serialize_provider_params(
+    params: dict[str, str | int | float] | None,
+) -> str:
+    """
+    Serialize provider parameters for inclusion in the spec hash.
+
+    Args:
+        params: Mapping of parameter name -> value
+
+    Returns:
+        Stable string representation
+    """
+    if not params:
+        return ""
+    components = []
+    for key in sorted(params):
+        value = params[key]
+        components.append(f"{key}={value}")
+    return "|".join(components)
 
 
 def normalize_docstring(docstring: str) -> str:

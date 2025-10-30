@@ -79,10 +79,11 @@ print(sum_str("5", "7"))  # "12"
 - ✅ Python 3.12+ support
 - ✅ Pure functions with `@vibesafe.func`
 - ✅ HTTP endpoints with `@vibesafe.http` (FastAPI)
-- ✅ Doctest-based verification
-- ✅ Hash-locked checkpoints
-- ✅ OpenAI-compatible providers
-- ✅ CLI commands: `scan`, `compile`, `test`, `save`
+- ✅ Doctest-based verification + lint/type gates (ruff, mypy)
+- ✅ Hash-locked checkpoints + drift detection
+- ✅ OpenAI-compatible providers with on-disk caching
+- ✅ CLI commands: `scan`, `compile`, `test`, `status`, `diff`, `save`
+- ✅ Dependency freezing via `--freeze-http-deps`
 - ✅ Jinja2 prompt templates
 - ✅ Basic MCP server for editor integration
 
@@ -131,9 +132,33 @@ vibesafe test --target UNIT_ID # Test specific unit
 Activate checkpoints (after tests pass):
 
 ```bash
-vibesafe save                  # Save all (if all tests pass)
-vibesafe save --target UNIT_ID # Save specific unit
+vibesafe save                                  # Save all (if all tests pass)
+vibesafe save --target UNIT_ID                 # Save specific unit
+vibesafe save --target UNIT_ID --freeze-http-deps  # Also snapshot runtime deps
 ```
+
+When `--freeze-http-deps` is provided, Vibesafe writes `requirements.vibesafe.txt` and embeds the captured package versions into each checkpoint’s `meta.toml`.
+
+### `vibesafe status`
+
+Summarize registered units, doctest counts, and active checkpoint hashes:
+
+```bash
+vibesafe status
+```
+
+Use this to confirm new specs are registered and active hashes match the latest spec revision.
+
+### `vibesafe diff`
+
+Inspect drift between the current spec hash and the active checkpoint:
+
+```bash
+vibesafe diff                   # Check all units
+vibesafe diff --target UNIT_ID  # Focus on one unit
+```
+
+The command reports mismatched hashes and the filesystem location of the stale checkpoint.
 
 ## Architecture
 
@@ -169,6 +194,16 @@ project/
 5. **Verification**: Run doctests against generated implementation
 6. **Checkpoint Storage**: Save implementation with metadata in `.vibesafe/`
 7. **Runtime Loading**: `__generated__` shims load active checkpoints
+
+### Error Handling
+
+- Use the `VibeHandled` alias (exported alongside `VibesafeHandled`) in spec stubs so docs and code snippets stay consistent.
+- The pipeline raises descriptive exceptions to guide remediation:
+  - `VibesafeMissingDoctest` when a spec lacks doctests.
+  - `VibesafeValidationError` if generated code fails basic sanity checks (e.g., wrong function signature).
+  - `VibesafeProviderError` when upstream LLM calls fail.
+  - `VibesafeHashMismatch` and `VibesafeCheckpointMissing` during runtime loading if checkpoints drift or are missing.
+  Handle these in tooling or surface them to contributors to tighten specs.
 
 ## Configuration
 
