@@ -1,0 +1,205 @@
+"""
+Core decorators and sentinel types for defless.
+"""
+
+import functools
+import inspect
+from typing import Any, Callable, TypeVar, ParamSpec
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+class DeflessHandled:
+    """
+    Sentinel type marking where the spec ends and AI-generated code should begin.
+
+    Usage:
+        @defless.func
+        def my_func(x: int) -> int:
+            '''Add 1 to x'''
+            yield DeflessHandled()
+    """
+
+    def __repr__(self) -> str:
+        return "DeflessHandled()"
+
+
+class DeflessDecorator:
+    """
+    Main decorator class for marking functions and endpoints for code generation.
+    """
+
+    def __init__(self):
+        self._registry: dict[str, dict[str, Any]] = {}
+
+    def func(
+        self,
+        fn: Callable[P, R] | None = None,
+        *,
+        provider: str | None = None,
+        template: str | None = None,
+    ) -> Callable[P, R]:
+        """
+        Decorator for pure/utility functions.
+
+        Args:
+            fn: The function to decorate
+            provider: Override provider from config
+            template: Override template path
+
+        Example:
+            @defless.func
+            def sum_str(a: str, b: str) -> str:
+                '''Add two ints represented as strings.
+
+                >>> sum_str("2", "3")
+                '5'
+                '''
+                a, b = int(a), int(b)
+                yield DeflessHandled()
+        """
+
+        def decorator(func: Callable[P, R]) -> Callable[P, R]:
+            # Get module and qualname
+            module = func.__module__
+            qualname = func.__qualname__
+            unit_id = f"{module}/{qualname}"
+
+            # Store metadata
+            self._registry[unit_id] = {
+                "type": "function",
+                "func": func,
+                "provider": provider,
+                "template": template or "function.j2",
+                "module": module,
+                "qualname": qualname,
+            }
+
+            # Mark the function
+            func.__defless_unit_id__ = unit_id  # type: ignore
+            func.__defless_type__ = "function"  # type: ignore
+            func.__defless_provider__ = provider  # type: ignore
+            func.__defless_template__ = template or "function.j2"  # type: ignore
+
+            @functools.wraps(func)
+            def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                # Import here to avoid circular dependency
+                from defless.runtime import load_active
+
+                # Try to load generated implementation
+                try:
+                    impl = load_active(unit_id)
+                    return impl(*args, **kwargs)
+                except Exception as e:
+                    # Fall back to original function (which should yield DeflessHandled)
+                    result = func(*args, **kwargs)
+                    # Check if it's a generator that yielded DeflessHandled
+                    if inspect.isgenerator(result):
+                        for item in result:
+                            if isinstance(item, DeflessHandled):
+                                raise RuntimeError(
+                                    f"Function {unit_id} has not been compiled yet. "
+                                    f"Run 'defless compile --target {unit_id}' first."
+                                ) from e
+                    return result
+
+            return wrapper  # type: ignore
+
+        if fn is None:
+            return decorator  # type: ignore
+        return decorator(fn)
+
+    def http(
+        self,
+        *,
+        method: str = "GET",
+        path: str = "/",
+        provider: str | None = None,
+        template: str | None = None,
+    ) -> Callable[[Callable[P, R]], Callable[P, R]]:
+        """
+        Decorator for HTTP endpoints (FastAPI).
+
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            path: URL path
+            provider: Override provider from config
+            template: Override template path
+
+        Example:
+            @defless.http(method="POST", path="/sum")
+            async def sum_endpoint(a: int, b: int) -> dict[str, int]:
+                '''Returns {"sum": a+b}
+
+                >>> import anyio
+                >>> anyio.run(lambda: sum_endpoint(2, 3))
+                {'sum': 5}
+                '''
+                return DeflessHandled()
+        """
+
+        def decorator(func: Callable[P, R]) -> Callable[P, R]:
+            # Get module and qualname
+            module = func.__module__
+            qualname = func.__qualname__
+            unit_id = f"{module}/{qualname}"
+
+            # Store metadata
+            self._registry[unit_id] = {
+                "type": "http",
+                "func": func,
+                "method": method,
+                "path": path,
+                "provider": provider,
+                "template": template or "http_endpoint.j2",
+                "module": module,
+                "qualname": qualname,
+            }
+
+            # Mark the function
+            func.__defless_unit_id__ = unit_id  # type: ignore
+            func.__defless_type__ = "http"  # type: ignore
+            func.__defless_method__ = method  # type: ignore
+            func.__defless_path__ = path  # type: ignore
+            func.__defless_provider__ = provider  # type: ignore
+            func.__defless_template__ = template or "http_endpoint.j2"  # type: ignore
+
+            @functools.wraps(func)
+            async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                # Import here to avoid circular dependency
+                from defless.runtime import load_active
+
+                # Try to load generated implementation
+                try:
+                    impl = load_active(unit_id)
+                    if inspect.iscoroutinefunction(impl):
+                        return await impl(*args, **kwargs)
+                    return impl(*args, **kwargs)
+                except Exception as e:
+                    # Fall back to original function
+                    result = func(*args, **kwargs)
+                    if isinstance(result, DeflessHandled):
+                        raise RuntimeError(
+                            f"HTTP endpoint {unit_id} has not been compiled yet. "
+                            f"Run 'defless compile --target {unit_id}' first."
+                        ) from e
+                    if inspect.iscoroutine(result):
+                        return await result
+                    return result
+
+            return wrapper  # type: ignore
+
+        return decorator
+
+    def get_registry(self) -> dict[str, dict[str, Any]]:
+        """Get all registered defless units."""
+        return self._registry.copy()
+
+    def get_unit(self, unit_id: str) -> dict[str, Any] | None:
+        """Get metadata for a specific unit."""
+        return self._registry.get(unit_id)
+
+
+# Global instance
+defless = DeflessDecorator()

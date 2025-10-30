@@ -7,7 +7,27 @@ authors = [
     { name = "Claude", email = "noreply@anthropic.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "jinja2>=3.1.0",
+    "tomli>=2.0.0; python_version < '3.11'",
+    "openai>=1.0.0",
+    "fastapi>=0.115.0",
+    "pydantic>=2.8.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "mypy>=1.11.0",
+    "ruff>=0.6.0",
+    "pyright>=1.1.0",
+]
+
+[project.scripts]
+defless = "defless.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]

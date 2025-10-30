@@ -1,0 +1,29 @@
+# Defless Configuration
+
+[project]
+python = ">=3.12"
+env = "dev"  # dev or prod
+
+[provider.default]
+kind = "openai-compatible"
+model = "gpt-4o-mini"
+temperature = 0.0
+seed = 42
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+timeout = 60
+
+[paths]
+checkpoints = ".defless/checkpoints"
+cache = ".defless/cache"
+index = ".defless/index.toml"
+generated = "__generated__"
+
+[prompts]
+function = "prompts/function.j2"
+http = "prompts/http_endpoint.j2"
+
+[sandbox]
+enabled = false
+timeout = 10
+memory_mb = 256
