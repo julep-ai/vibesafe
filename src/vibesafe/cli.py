@@ -394,6 +394,54 @@ def diff(target: str | None) -> None:
 
 
 @main.command()
+def check() -> None:
+    """Run lint, type-check, doctests, and drift detection."""
+
+    _import_project_modules()
+
+    overall_success = True
+
+    console.print("[bold]Running lint (ruff)...[/bold]")
+    if not _run_command(["ruff", "check", "src", "tests", "examples"]):
+        overall_success = False
+
+    console.print("[bold]Running type checks (mypy)...[/bold]")
+    if not _run_command(["mypy", "src/vibesafe"]):
+        overall_success = False
+
+    console.print("[bold]Running doctests...[/bold]")
+    test_results = run_all_tests()
+    failed_units = [uid for uid, result in test_results.items() if not result.passed]
+    if failed_units:
+        overall_success = False
+        for uid in failed_units:
+            result = test_results[uid]
+            console.print(
+                f"[red]✗ {uid}[/red] ({result.failures}/{result.total} failed)"
+            )
+    else:
+        total_tests = sum(result.total for result in test_results.values())
+        console.print(f"[green]✓ All doctests passed ({total_tests} total)[/green]")
+
+    console.print("[bold]Checking for drift...[/bold]")
+    drift_count, missing_index = _detect_drift()
+    if missing_index:
+        overall_success = False
+        console.print("[red]✗ No index found – run 'vibesafe compile' and 'vibesafe save'.[/red]")
+    elif drift_count:
+        overall_success = False
+        console.print(f"[red]✗ Drift detected in {drift_count} unit(s).[/red]")
+    else:
+        console.print("[green]✓ No drift detected.[/green]")
+
+    if overall_success:
+        console.print("\n[bold green]Check complete – all gates passed.[/bold green]")
+    else:
+        console.print("\n[bold red]Check failed – see messages above.[/bold red]")
+        sys.exit(1)
+
+
+@main.command()
 @click.option("--target", help="Unit ID to open in the REPL")
 def repl(target: str | None) -> None:
     """Interactive compile/test loop for a vibesafe unit."""
@@ -687,6 +735,75 @@ def _import_project_modules() -> None:
             except Exception:
                 # Skip files that can't be imported
                 pass
+
+
+def _run_command(cmd: list[str]) -> bool:
+    """Execute a shell command, returning True on success."""
+
+    try:
+        subprocess.run(cmd, check=True, text=True)
+        console.print("  [green]✓ success[/green]")
+        return True
+    except FileNotFoundError:
+        console.print(f"  [red]✗ Command not found:[/red] {' '.join(cmd)}")
+    except subprocess.CalledProcessError as exc:
+        output = exc.stderr.strip() if exc.stderr else exc.stdout.strip()
+        detail = f" ({output})" if output else ""
+        console.print(
+            f"  [red]✗ Command failed ({exc.returncode})[/red]{detail}"
+        )
+    return False
+
+
+def _detect_drift() -> tuple[int, bool]:
+    """Return (drift_count, missing_index)."""
+
+    registry = vibesafe.get_registry()
+    if not registry:
+        return 0, False
+
+    config = get_config()
+    index_path = config.resolve_path(config.paths.index)
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:  # pragma: no cover
+        import tomli as tomllib  # type: ignore[misc]
+
+    if not index_path.exists():
+        return 0, True
+
+    with open(index_path, "rb") as fh:
+        index = tomllib.load(fh)
+
+    drift_count = 0
+    for unit_id, unit_meta in registry.items():
+        provider_name = unit_meta.get("provider") or "default"
+        provider_cfg = config.get_provider(provider_name)
+        spec = extract_spec(unit_meta["func"])
+        dependency_digest = compute_dependency_digest(spec["dependencies"])
+        provider_params = {
+            "temperature": provider_cfg.temperature,
+            "seed": provider_cfg.seed,
+            "timeout": provider_cfg.timeout,
+        }
+        template_id = unit_meta.get("template", "prompts/function.j2")
+        current_hash = compute_spec_hash(
+            signature=spec["signature"],
+            docstring=spec["docstring"],
+            body_before_handled=spec["body_before_handled"],
+            template_id=template_id,
+            provider_model=provider_cfg.model,
+            provider_params=provider_params,
+            dependency_digest=dependency_digest,
+        )
+
+        unit_index = index.get(unit_id, {})
+        active_hash = unit_index.get("active")
+        if not active_hash or active_hash != current_hash:
+            drift_count += 1
+
+    return drift_count, False
 
 
 if __name__ == "__main__":

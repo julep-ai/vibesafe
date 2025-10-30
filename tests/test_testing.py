@@ -201,6 +201,49 @@ def doc_func(msg: str) -> str:
         assert "'hi'" in contents
         assert result.total == 2
 
+    def test_checkpoint_uses_sandbox(
+        self,
+        checkpoint_dir,
+        temp_dir,
+        test_config,
+        monkeypatch,
+        clear_defless_registry,
+    ):
+        from vibesafe import config as config_module
+
+        test_config.sandbox.enabled = True
+        test_config.sandbox.timeout = 5
+        test_config.sandbox.memory_mb = 64
+
+        monkeypatch.chdir(temp_dir)
+        config_module._config = test_config
+
+        @vibesafe.func
+        def sandboxed(msg: str) -> str:
+            return VibesafeHandled()
+
+        impl_path = checkpoint_dir / "impl.py"
+        impl_path.write_text("""def sandboxed(msg: str) -> str:\n    return msg\n""")
+
+        unit_meta = {
+            "func": sandboxed,
+            "module": sandboxed.__module__,
+            "qualname": sandboxed.__qualname__,
+        }
+
+        sandbox_called = {"called": False}
+
+        def fake_sandbox(unit_meta, spec, sandbox_cfg):
+            sandbox_called["called"] = True
+            return TestResult(passed=True, total=0)
+
+        monkeypatch.setattr("vibesafe.testing._run_sandbox_checks", fake_sandbox)
+        monkeypatch.setattr("vibesafe.testing._run_quality_gates", lambda path: [])
+
+        result = test_checkpoint(checkpoint_dir, unit_meta)
+        assert result.passed
+        assert sandbox_called["called"]
+
 
 class TestTestUnit:
     """Tests for test_unit function."""

@@ -6,7 +6,7 @@ import pytest
 from click.testing import CliRunner
 
 from vibesafe import VibesafeHandled, vibesafe
-from vibesafe.cli import compile, diff, main, repl, save, scan, status, test
+from vibesafe.cli import check, compile, diff, main, repl, save, scan, status, test
 
 
 class TestCLI:
@@ -96,6 +96,29 @@ class TestCLI:
         result = runner.invoke(diff, ["--help"])
         assert result.exit_code == 0
         assert "diff" in result.output.lower()
+
+    def test_check_help(self, runner):
+        """Test check command help."""
+        result = runner.invoke(check, ["--help"])
+        assert result.exit_code == 0
+        assert "lint" in result.output.lower()
+
+    def test_check_runs(
+        self,
+        runner,
+        monkeypatch,
+        clear_defless_registry,
+    ):
+        """Check command succeeds when helpers succeed."""
+
+        monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
+        monkeypatch.setattr("vibesafe.cli._run_command", lambda cmd: True)
+        monkeypatch.setattr("vibesafe.cli.run_all_tests", lambda: {})
+        monkeypatch.setattr("vibesafe.cli._detect_drift", lambda: (0, False))
+
+        result = runner.invoke(check)
+        assert result.exit_code == 0
+        assert "Check complete" in result.output
 
     def test_repl_help(self, runner):
         """Test repl command help."""

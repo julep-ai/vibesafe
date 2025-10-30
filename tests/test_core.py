@@ -129,8 +129,16 @@ class TestVibesafeDecorator:
         assert update_endpoint.__vibesafe_provider__ == "custom"
         assert update_endpoint.__vibesafe_template__ == "http_custom.j2"
 
-    def test_func_decorator_raises_on_missing_checkpoint(self, clear_defless_registry):
+    def test_func_decorator_raises_on_missing_checkpoint(
+        self, clear_defless_registry, monkeypatch
+    ):
         """Test that calling uncompiled function raises error."""
+
+        monkeypatch.setattr(
+            VibesafeDecorator,
+            "_should_auto_generate",
+            lambda self, exc: False,
+        )
 
         @vibesafe.func
         def uncompiled_func(x: int) -> int:
@@ -140,8 +148,16 @@ class TestVibesafeDecorator:
         with pytest.raises(RuntimeError, match="has not been compiled yet"):
             uncompiled_func(5)
 
-    def test_func_decorator_missing_boundary_marker(self, clear_defless_registry):
+    def test_func_decorator_missing_boundary_marker(
+        self, clear_defless_registry, monkeypatch
+    ):
         """Test that specs without VibesafeHandled sentinel raise helpfully."""
+
+        monkeypatch.setattr(
+            VibesafeDecorator,
+            "_should_auto_generate",
+            lambda self, exc: False,
+        )
 
         @vibesafe.func
         def missing_marker(msg: str) -> str:
@@ -310,6 +326,7 @@ class TestVibesafeDecorator:
             lambda unit_id: TestResult(passed=True, total=0),
         )
         monkeypatch.setattr(VibesafeDecorator, "_should_auto_generate", lambda self, exc: True)
+        monkeypatch.setattr(VibesafeDecorator, "_in_interactive_session", lambda self: True)
 
         @vibesafe.func
         def repl_func(msg: str) -> str:
@@ -319,8 +336,14 @@ class TestVibesafeDecorator:
         assert result == "generated:moo"
         assert generate_calls == [False, True]
 
-    def test_missing_doctest_hint_in_error(self, clear_defless_registry):
+    def test_missing_doctest_hint_in_error(self, clear_defless_registry, monkeypatch):
         """Runtime error mentions missing doctest when auto generation fails."""
+
+        monkeypatch.setattr(
+            VibesafeDecorator,
+            "_should_auto_generate",
+            lambda self, exc: False,
+        )
 
         @vibesafe.func
         def missing_doc(msg: str) -> str:
@@ -333,8 +356,16 @@ class TestVibesafeDecorator:
         assert "does not declare any doctests" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_http_decorator_raises_on_missing_checkpoint(self, clear_defless_registry):
+    async def test_http_decorator_raises_on_missing_checkpoint(
+        self, clear_defless_registry, monkeypatch
+    ):
         """Test that calling uncompiled endpoint raises error."""
+
+        monkeypatch.setattr(
+            VibesafeDecorator,
+            "_should_auto_generate",
+            lambda self, exc: False,
+        )
 
         @vibesafe.http(method="GET", path="/test")
         async def uncompiled_endpoint(x: int) -> dict[str, int]:

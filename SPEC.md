@@ -493,7 +493,11 @@ In dev mode, simply calling a spec function will trigger generation if missing o
 * `your_pkg/__generated__/...` shims (tiny, stable)
 * `.vibesafe/index.toml` (diff-friendly)
 * `.vibesafe/checkpoints/**/meta.toml`
-* Optionally: **include** `impl.py` files for fully offline prod deploys (recommended)
+* Optionally: **include** `impl.py` files for fully offline prod deploys (recommended). If your
+  production artifacts need to run without access to checkpoint storage, copy the
+  checkpoint directory (`.vibesafe/checkpoints/.../impl.py`) into your release bundle.
+  Otherwise leave the generated code out of version control and rely on `vibesafe save`
+  to refresh checkpoints during deployment.
 
 ## 18) CI
 

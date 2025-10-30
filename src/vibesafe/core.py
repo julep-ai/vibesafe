@@ -320,11 +320,14 @@ class VibesafeDecorator:
         try:
             checkpoint_info = generate_for_unit(unit_id, force=False)
         except VibesafeMissingDoctest:
-            checkpoint_info = generate_for_unit(
-                unit_id,
-                force=False,
-                allow_missing_doctest=True,
-            )
+            if self._in_interactive_session():
+                checkpoint_info = generate_for_unit(
+                    unit_id,
+                    force=False,
+                    allow_missing_doctest=True,
+                )
+            else:
+                raise
         update_index(
             unit_id,
             checkpoint_info["spec_hash"],

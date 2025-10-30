@@ -5,11 +5,13 @@ AST parsing utilities to extract spec components.
 import ast
 import contextlib
 import doctest
+import hashlib
 import inspect
 import linecache
 import re
 import textwrap
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 
@@ -245,9 +247,22 @@ class SpecExtractor:
                 obj = module_dict[name]
                 try:
                     source = inspect.getsource(obj)
+                    file_path = inspect.getfile(obj)
                 except (OSError, TypeError):
                     continue
-                dependencies[name] = textwrap.dedent(source).strip()
+                normalized_source = textwrap.dedent(source).strip()
+                file_hash = ""
+                try:
+                    with open(file_path, "rb") as fh:
+                        file_hash = hashlib.sha256(fh.read()).hexdigest()
+                except Exception:
+                    file_hash = ""
+
+                dependencies[name] = {
+                    "source": normalized_source,
+                    "path": str(Path(file_path).resolve()) if file_path else "",
+                    "file_hash": file_hash,
+                }
 
         return dependencies
 

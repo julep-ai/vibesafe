@@ -110,7 +110,10 @@ class TestSpecExtractor:
         extractor = SpecExtractor(dep_func)
         deps = extractor.extract_dependencies()
         assert "helper_dependency" in deps
-        assert "return value + 1" in deps["helper_dependency"]
+        helper = deps["helper_dependency"]
+        assert "return value + 1" in helper["source"]
+        assert helper["path"].endswith("tests/test_ast_parser.py")
+        assert helper["file_hash"]
 
     def test_to_dict(self, clear_defless_registry):
         """Test converting extraction to dictionary."""
