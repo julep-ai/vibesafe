@@ -2,8 +2,6 @@
 Integration tests for defless end-to-end workflows.
 """
 
-from pathlib import Path
-
 import pytest
 
 from defless import DeflessHandled, defless
@@ -279,9 +277,7 @@ class TestErrorHandling:
         with pytest.raises(ValueError, match="API key not found"):
             test_config.get_api_key()
 
-    def test_checkpoint_not_found_error(
-        self, test_config, temp_dir, monkeypatch
-    ):
+    def test_checkpoint_not_found_error(self, test_config, temp_dir, monkeypatch):
         """Test error when checkpoint not found."""
         monkeypatch.chdir(temp_dir)
         from defless import config as config_module

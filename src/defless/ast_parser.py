@@ -3,10 +3,12 @@ AST parsing utilities to extract spec components.
 """
 
 import ast
+import contextlib
 import doctest
 import inspect
 import textwrap
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 class SpecExtractor:
@@ -49,10 +51,7 @@ class SpecExtractor:
         return_anno = ""
         if sig.return_annotation != inspect.Signature.empty:
             ret = sig.return_annotation
-            if hasattr(ret, "__name__"):
-                return_anno = f" -> {ret.__name__}"
-            else:
-                return_anno = f" -> {ret}"
+            return_anno = f" -> {ret.__name__}" if hasattr(ret, "__name__") else f" -> {ret}"
 
         # Check if async
         prefix = "async def" if inspect.iscoroutinefunction(self.func) else "def"
@@ -116,10 +115,8 @@ class SpecExtractor:
 
         # Join and dedent
         body_code = "\n".join(body_lines)
-        try:
+        with contextlib.suppress(Exception):
             body_code = inspect.cleandoc(body_code)
-        except Exception:
-            pass
 
         return body_code
 

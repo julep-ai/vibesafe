@@ -92,9 +92,7 @@ def _load_impl_func(impl_path: Path, unit_meta: dict[str, Any]) -> Any:
     return getattr(module, func_name)
 
 
-def _run_doctests(
-    func: Any, docstring: str, examples: list[doctest.Example]
-) -> TestResult:
+def _run_doctests(func: Any, docstring: str, examples: list[doctest.Example]) -> TestResult:
     """
     Run doctest examples against a function.
 
@@ -128,9 +126,7 @@ def _run_doctests(
         # DocTestRunner prints to stdout, capture would require redirecting
         errors.append(f"{failures} doctest(s) failed")
 
-    return TestResult(
-        passed=(failures == 0), failures=failures, total=total, errors=errors
-    )
+    return TestResult(passed=(failures == 0), failures=failures, total=total, errors=errors)
 
 
 def test_unit(unit_id: str) -> TestResult:
@@ -153,8 +149,6 @@ def test_unit(unit_id: str) -> TestResult:
     # Get active checkpoint
     config = get_config()
     try:
-        from defless.runtime import load_active
-
         if sys.version_info >= (3, 11):
             import tomllib
         else:
@@ -162,18 +156,14 @@ def test_unit(unit_id: str) -> TestResult:
 
         index_path = config.resolve_path(config.paths.index)
         if not index_path.exists():
-            return TestResult(
-                passed=False, errors=["No index file found - run compile first"]
-            )
+            return TestResult(passed=False, errors=["No index file found - run compile first"])
 
         with open(index_path, "rb") as f:
             index = tomllib.load(f)
 
         unit_index = index.get(unit_id)
         if not unit_index:
-            return TestResult(
-                passed=False, errors=["Unit not in index - run compile first"]
-            )
+            return TestResult(passed=False, errors=["Unit not in index - run compile first"])
 
         active_hash = unit_index["active"]
 

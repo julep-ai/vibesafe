@@ -2,8 +2,6 @@
 Tests for defless.ast_parser module.
 """
 
-import pytest
-
 from defless import DeflessHandled, defless
 from defless.ast_parser import SpecExtractor, extract_spec
 

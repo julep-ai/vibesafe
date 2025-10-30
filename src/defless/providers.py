@@ -91,7 +91,7 @@ class CachedProvider:
 
         # Check cache
         if cache_file.exists():
-            with open(cache_file, "r") as f:
+            with open(cache_file) as f:
                 data = json.load(f)
                 return data["completion"]
 
@@ -136,6 +136,7 @@ def get_provider(provider_name: str = "default", use_cache: bool = True) -> Prov
     api_key = config.get_api_key(provider_name)
 
     # Create base provider
+    provider: Provider
     if provider_config.kind == "openai-compatible":
         provider = OpenAICompatibleProvider(provider_config, api_key)
     else:

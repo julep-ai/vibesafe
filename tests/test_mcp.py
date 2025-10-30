@@ -2,10 +2,6 @@
 Tests for defless.mcp module.
 """
 
-import json
-
-import pytest
-
 from defless import DeflessHandled, defless
 from defless.mcp import MCPServer
 

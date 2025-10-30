@@ -2,11 +2,6 @@
 Tests for defless.testing module.
 """
 
-import doctest
-from pathlib import Path
-
-import pytest
-
 from defless import DeflessHandled, defless
 from defless.testing import TestResult, test_checkpoint, test_unit
 

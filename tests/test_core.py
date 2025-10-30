@@ -2,7 +2,6 @@
 Tests for defless.core module.
 """
 
-import inspect
 from typing import Any
 
 import pytest
@@ -128,9 +127,7 @@ class TestDeflessDecorator:
             uncompiled_func(5)
 
     @pytest.mark.asyncio
-    async def test_http_decorator_raises_on_missing_checkpoint(
-        self, clear_defless_registry
-    ):
+    async def test_http_decorator_raises_on_missing_checkpoint(self, clear_defless_registry):
         """Test that calling uncompiled endpoint raises error."""
 
         @defless.http(method="GET", path="/test")

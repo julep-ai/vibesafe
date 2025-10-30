@@ -4,8 +4,9 @@ Runtime loading and execution of generated implementations.
 
 import importlib.util
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -59,9 +60,7 @@ def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
 
     active_hash = unit_index.get("active")
     if not active_hash:
-        raise CheckpointNotFoundError(
-            f"No active hash in index for unit: {unit_id}"
-        )
+        raise CheckpointNotFoundError(f"No active hash in index for unit: {unit_id}")
 
     # Get checkpoint directory
     checkpoints_base = config.resolve_path(config.paths.checkpoints)
@@ -69,9 +68,7 @@ def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
     checkpoint_dir = checkpoints_base / unit_path / active_hash[:16]
 
     if not checkpoint_dir.exists():
-        raise CheckpointNotFoundError(
-            f"Checkpoint directory not found: {checkpoint_dir}"
-        )
+        raise CheckpointNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
 
     # Load implementation
     impl_path = checkpoint_dir / "impl.py"
@@ -95,9 +92,7 @@ def load_active(unit_id: str, verify_hash: bool = True) -> Callable[..., Any]:
     # Get function (last part of unit_id after /)
     func_name = unit_id.split("/")[-1]
     if not hasattr(module, func_name):
-        raise AttributeError(
-            f"Function {func_name} not found in generated module {impl_path}"
-        )
+        raise AttributeError(f"Function {func_name} not found in generated module {impl_path}")
 
     return getattr(module, func_name)
 
@@ -113,7 +108,7 @@ def _verify_checkpoint_hash(checkpoint_dir: Path, impl_path: Path) -> None:
     Raises:
         HashMismatchError: If hashes don't match
     """
-    from defless.hashing import compute_checkpoint_hash, hash_code
+    from defless.hashing import compute_checkpoint_hash
 
     # Load metadata
     meta_path = checkpoint_dir / "meta.toml"
@@ -197,7 +192,6 @@ def update_index(unit_id: str, active_hash: str) -> None:
         unit_id: Unit identifier
         active_hash: Hash of active checkpoint
     """
-    import toml
 
     config = get_config()
     index_path = config.resolve_path(config.paths.index)

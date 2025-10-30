@@ -2,8 +2,6 @@
 Tests for defless.hashing module.
 """
 
-import pytest
-
 from defless.hashing import (
     compute_checkpoint_hash,
     compute_dependency_digest,

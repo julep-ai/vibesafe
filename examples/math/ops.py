@@ -2,7 +2,7 @@
 Example defless functions for mathematical operations.
 """
 
-from defless import defless, DeflessHandled
+from defless import DeflessHandled, defless
 
 
 @defless.func

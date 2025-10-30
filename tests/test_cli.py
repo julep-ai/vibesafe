@@ -35,9 +35,7 @@ class TestCLI:
         result = runner.invoke(scan)
         assert "No defless units found" in result.output
 
-    def test_scan_with_units(
-        self, runner, temp_dir, monkeypatch, clear_defless_registry
-    ):
+    def test_scan_with_units(self, runner, temp_dir, monkeypatch, clear_defless_registry):
         """Test scan with registered units."""
 
         @defless.func
@@ -50,9 +48,7 @@ class TestCLI:
         # May not show unit if module not imported
         assert result.exit_code == 0
 
-    def test_compile_no_units(
-        self, runner, temp_dir, monkeypatch, clear_defless_registry
-    ):
+    def test_compile_no_units(self, runner, temp_dir, monkeypatch, clear_defless_registry):
         """Test compile with no units."""
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(compile)

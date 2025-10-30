@@ -3,18 +3,16 @@ Tests for defless.runtime module.
 """
 
 import sys
-from pathlib import Path
 
 import pytest
 
 if sys.version_info >= (3, 11):
-    import tomllib
+    pass
 else:
-    import tomli as tomllib
+    pass
 
 from defless.runtime import (
     CheckpointNotFoundError,
-    HashMismatchError,
     build_shim,
     load_active,
     update_index,
@@ -35,9 +33,7 @@ class TestLoadActive:
         with pytest.raises(CheckpointNotFoundError, match="No index found"):
             load_active("test/unit")
 
-    def test_load_active_no_unit_in_index_raises(
-        self, test_config, temp_dir, monkeypatch
-    ):
+    def test_load_active_no_unit_in_index_raises(self, test_config, temp_dir, monkeypatch):
         """Test loading unit not in index raises error."""
         index_path = temp_dir / ".defless" / "index.toml"
         index_path.parent.mkdir(parents=True)
@@ -51,9 +47,7 @@ class TestLoadActive:
         with pytest.raises(CheckpointNotFoundError, match="No active checkpoint"):
             load_active("test/unit")
 
-    def test_load_active_missing_checkpoint_dir_raises(
-        self, test_config, temp_dir, monkeypatch
-    ):
+    def test_load_active_missing_checkpoint_dir_raises(self, test_config, temp_dir, monkeypatch):
         """Test loading with missing checkpoint directory raises error."""
         index_path = temp_dir / ".defless" / "index.toml"
         index_path.parent.mkdir(parents=True)
@@ -77,9 +71,7 @@ class TestLoadActive:
         index_path.write_text('["test/func"]\nactive = "abc123"\n')
 
         # Move checkpoint to correct location
-        dest_checkpoint = (
-            temp_dir / ".defless" / "checkpoints" / "test" / "func" / "abc123"
-        )
+        dest_checkpoint = temp_dir / ".defless" / "checkpoints" / "test" / "func" / "abc123"
         dest_checkpoint.parent.mkdir(parents=True, exist_ok=True)
         sample_impl.rename(dest_checkpoint / "impl.py")
         sample_meta.rename(dest_checkpoint / "meta.toml")
@@ -186,9 +178,7 @@ class TestUpdateIndex:
         assert "new_hash" in content
         assert "old_hash" not in content
 
-    def test_update_index_preserves_other_units(
-        self, test_config, temp_dir, monkeypatch
-    ):
+    def test_update_index_preserves_other_units(self, test_config, temp_dir, monkeypatch):
         """Test updating one unit preserves others."""
         index_path = temp_dir / ".defless" / "index.toml"
         index_path.parent.mkdir(parents=True, exist_ok=True)

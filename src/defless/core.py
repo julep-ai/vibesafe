@@ -4,7 +4,8 @@ Core decorators and sentinel types for defless.
 
 import functools
 import inspect
-from typing import Any, Callable, TypeVar, ParamSpec
+from collections.abc import Callable
+from typing import Any, ParamSpec, TypeVar
 
 P = ParamSpec("P")
 R = TypeVar("R")

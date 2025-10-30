@@ -2,7 +2,6 @@
 Tests for defless.config module.
 """
 
-import os
 from pathlib import Path
 
 import pytest
@@ -11,8 +10,8 @@ from defless.config import (
     DeflessConfig,
     PathsConfig,
     ProjectConfig,
-    ProviderConfig,
     PromptsConfig,
+    ProviderConfig,
     SandboxConfig,
     get_config,
 )

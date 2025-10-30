@@ -11,7 +11,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Environment, FileSystemLoader
 
 from defless import __version__
 from defless.ast_parser import extract_spec
@@ -72,9 +72,7 @@ class CodeGenerator:
         chk_hash = compute_checkpoint_hash(spec_hash, prompt_hash, generated_code)
 
         # Save checkpoint
-        checkpoint_info = self._save_checkpoint(
-            spec_hash, chk_hash, prompt_hash, generated_code
-        )
+        checkpoint_info = self._save_checkpoint(spec_hash, chk_hash, prompt_hash, generated_code)
 
         return checkpoint_info
 
@@ -164,7 +162,7 @@ chk_sha = "{chk_hash}"
 prompt_sha = "{prompt_hash}"
 defless_version = "{__version__}"
 provider = "{self.provider_config.kind}:{self.provider_config.model}"
-template = "{self.unit_meta.get('template', 'function.j2')}"
+template = "{self.unit_meta.get("template", "function.j2")}"
 
 [signature]
 text = '''{self.spec["signature"]}'''

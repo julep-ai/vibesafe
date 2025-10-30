@@ -2,7 +2,7 @@
 Example defless HTTP endpoints.
 """
 
-from defless import defless, DeflessHandled
+from defless import DeflessHandled, defless
 
 
 @defless.http(method="POST", path="/sum")

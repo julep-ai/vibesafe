@@ -2,16 +2,14 @@
 Shared pytest fixtures for defless tests.
 """
 
-import sys
-import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 
 from defless import DeflessHandled, defless
 from defless.config import DeflessConfig
-
 
 # Tell pytest not to collect test_checkpoint and test_unit from defless.testing
 collect_ignore_glob = []

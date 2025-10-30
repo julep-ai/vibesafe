@@ -4,7 +4,6 @@ Hash computation for specs and checkpoints.
 
 import hashlib
 import inspect
-from typing import Any
 
 from defless import __version__
 
@@ -55,9 +54,7 @@ def compute_spec_hash(
     return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
 
-def compute_checkpoint_hash(
-    spec_hash: str, prompt_hash: str, generated_code: str
-) -> str:
+def compute_checkpoint_hash(spec_hash: str, prompt_hash: str, generated_code: str) -> str:
     """
     Compute hash of a checkpoint.
 

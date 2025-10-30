@@ -41,9 +41,8 @@ class TestMathExamples:
 
     def test_sum_str_spec(self, clear_defless_registry):
         """Test sum_str has correct spec."""
-        from examples.math.ops import sum_str
-
         from defless.ast_parser import extract_spec
+        from examples.math.ops import sum_str
 
         spec = extract_spec(sum_str)
         assert "sum_str" in spec["signature"]
@@ -53,9 +52,8 @@ class TestMathExamples:
 
     def test_fibonacci_spec(self, clear_defless_registry):
         """Test fibonacci has correct spec."""
-        from examples.math.ops import fibonacci
-
         from defless.ast_parser import extract_spec
+        from examples.math.ops import fibonacci
 
         spec = extract_spec(fibonacci)
         assert "fibonacci" in spec["signature"]
@@ -64,9 +62,8 @@ class TestMathExamples:
 
     def test_is_prime_spec(self, clear_defless_registry):
         """Test is_prime has correct spec."""
-        from examples.math.ops import is_prime
-
         from defless.ast_parser import extract_spec
+        from examples.math.ops import is_prime
 
         spec = extract_spec(is_prime)
         assert "is_prime" in spec["signature"]
@@ -99,9 +96,8 @@ class TestAPIExamples:
 
     def test_sum_endpoint_spec(self, clear_defless_registry):
         """Test sum_endpoint has correct spec."""
-        from examples.api.routes import sum_endpoint
-
         from defless.ast_parser import extract_spec
+        from examples.api.routes import sum_endpoint
 
         spec = extract_spec(sum_endpoint)
         assert "sum_endpoint" in spec["signature"]
@@ -111,9 +107,8 @@ class TestAPIExamples:
 
     def test_hello_endpoint_spec(self, clear_defless_registry):
         """Test hello_endpoint has correct spec."""
-        from examples.api.routes import hello_endpoint
-
         from defless.ast_parser import extract_spec
+        from examples.api.routes import hello_endpoint
 
         spec = extract_spec(hello_endpoint)
         assert "hello_endpoint" in spec["signature"]

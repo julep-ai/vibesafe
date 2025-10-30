@@ -154,9 +154,7 @@ class DeflessConfig(BaseModel):
         provider = self.get_provider(provider_name)
         api_key = os.getenv(provider.api_key_env)
         if not api_key:
-            raise ValueError(
-                f"API key not found in environment variable: {provider.api_key_env}"
-            )
+            raise ValueError(f"API key not found in environment variable: {provider.api_key_env}")
         return api_key
 
     def resolve_path(self, path: str) -> Path:

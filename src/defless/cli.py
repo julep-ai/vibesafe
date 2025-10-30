@@ -115,9 +115,7 @@ def compile(target: str | None, force: bool) -> None:
             units_to_compile = [target]
         else:
             # Check if target is a module prefix
-            units_to_compile = [
-                uid for uid in registry if uid.startswith(target.replace(".", "/"))
-            ]
+            units_to_compile = [uid for uid in registry if uid.startswith(target.replace(".", "/"))]
 
         if not units_to_compile:
             console.print(f"[red]No units found matching: {target}[/red]")
@@ -132,13 +130,11 @@ def compile(target: str | None, force: bool) -> None:
 
         try:
             checkpoint_info = generate_for_unit(unit_id, force=force)
-            console.print(
-                f"  ✓ Generated checkpoint: {checkpoint_info['spec_hash'][:8]}"
-            )
+            console.print(f"  ✓ Generated checkpoint: {checkpoint_info['spec_hash'][:8]}")
 
             # Update index
             update_index(unit_id, checkpoint_info["spec_hash"])
-            console.print(f"  ✓ Updated index")
+            console.print("  ✓ Updated index")
 
             # Write shim
             shim_path = write_shim(unit_id)
@@ -186,9 +182,7 @@ def test(target: str | None) -> None:
             if result:
                 console.print(f"[green]✓ {unit_id}[/green] ({result.total} tests)")
             else:
-                console.print(
-                    f"[red]✗ {unit_id}[/red] ({result.failures}/{result.total} failed)"
-                )
+                console.print(f"[red]✗ {unit_id}[/red] ({result.failures}/{result.total} failed)")
 
         console.print(f"\n[bold]Results:[/bold] {passed} passed, {failed} failed")
 
@@ -216,7 +210,7 @@ def save(target: str | None) -> None:
                 console.print(f"  {error}")
             sys.exit(1)
 
-        console.print(f"[green]✓ Tests passed, checkpoint is active[/green]")
+        console.print("[green]✓ Tests passed, checkpoint is active[/green]")
     else:
         console.print("[bold]Testing all units before save...[/bold]\n")
         results = run_all_tests()

@@ -12,7 +12,7 @@ from defless import __version__
 from defless.codegen import generate_for_unit
 from defless.core import defless
 from defless.runtime import update_index, write_shim
-from defless.testing import test_unit, run_all_tests
+from defless.testing import run_all_tests, test_unit
 
 
 class MCPServer:
