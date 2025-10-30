@@ -87,7 +87,7 @@ def compute_prompt_hash(prompt: str) -> str:
     return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 
 
-def compute_dependency_digest(dependencies: dict[str, str]) -> str:
+def compute_dependency_digest(dependencies: dict[str, str | dict[str, str]]) -> str:
     """
     Compute digest of function dependencies.
 

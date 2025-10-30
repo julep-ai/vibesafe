@@ -10,8 +10,7 @@ from typing import Any
 import pytest
 
 from vibesafe import VibesafeHandled, vibesafe
-from vibesafe.config import get_config
-from vibesafe.config import VibesafeConfig
+from vibesafe.config import VibesafeConfig, get_config
 
 # Tell pytest not to collect test_checkpoint and test_unit from vibesafe.testing
 collect_ignore_glob = []

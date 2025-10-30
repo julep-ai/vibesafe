@@ -3,6 +3,7 @@
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 import click
 from rich.console import Console
@@ -416,9 +417,7 @@ def check() -> None:
         overall_success = False
         for uid in failed_units:
             result = test_results[uid]
-            console.print(
-                f"[red]✗ {uid}[/red] ({result.failures}/{result.total} failed)"
-            )
+            console.print(f"[red]✗ {uid}[/red] ({result.failures}/{result.total} failed)")
     else:
         total_tests = sum(result.total for result in test_results.values())
         console.print(f"[green]✓ All doctests passed ({total_tests} total)[/green]")
@@ -460,14 +459,16 @@ def repl(target: str | None) -> None:
             console.print(f"  - {uid}")
         sys.exit(1)
 
-    if target not in registry:
-        console.print(f"[red]Unknown unit: {target}[/red]")
+    target_id = cast(str, target)
+
+    if target_id not in registry:
+        console.print(f"[red]Unknown unit: {target_id}[/red]")
         console.print("Known units:")
         for uid in sorted(registry):
             console.print(f"  - {uid}")
         sys.exit(1)
 
-    unit_meta = registry[target]
+    unit_meta = registry[target_id]
 
     def _unit_hash_state() -> tuple[str, str, str]:
         config = get_config()
@@ -503,7 +504,7 @@ def repl(target: str | None) -> None:
 
             with open(index_path, "rb") as fh:
                 index = tomllib.load(fh)
-                unit_entry = index.get(target, {})
+                unit_entry = index.get(target_id, {})
                 active_hash = unit_entry.get("active", "—")
                 created_at = unit_entry.get("created", "—")
 
@@ -513,7 +514,7 @@ def repl(target: str | None) -> None:
         spec = extract_spec(unit_meta["func"])
         current_hash, active_hash, created_at = _unit_hash_state()
 
-        console.rule(f"Vibesafe REPL — {target}")
+        console.rule(f"Vibesafe REPL — {target_id}")
         console.print(
             f"[bold]Docstring lines:[/bold] {len(spec['docstring'].splitlines())} • "
             f"[bold]Doctests:[/bold] {len(spec['doctests'])}"
@@ -531,24 +532,24 @@ def repl(target: str | None) -> None:
         nonlocal unit_meta
         console.print("\n[bold]Generating implementation...[/bold]")
         try:
-            checkpoint_info = generate_for_unit(target, force=force)
+            checkpoint_info = generate_for_unit(target_id, force=force)
             update_index(
-                target,
+                target_id,
                 checkpoint_info["spec_hash"],
                 created=checkpoint_info.get("created_at"),
             )
-            shim_path = write_shim(target)
+            shim_path = write_shim(target_id)
             console.print(f"  ✓ spec hash {checkpoint_info['spec_hash'][:8]} • shim {shim_path}")
         except Exception as exc:  # pragma: no cover - surfaced to CLI user
             console.print(f"[red]✗ Generation failed: {exc}[/red]")
             return
 
-        unit_meta = vibesafe.get_unit(target) or unit_meta
+        unit_meta = vibesafe.get_unit(target_id) or unit_meta
         _run_tests()
 
     def _run_tests() -> None:
         console.print("\n[bold]Running tests...[/bold]")
-        result = test_unit(target)
+        result = test_unit(target_id)
         if result:
             console.print(f"[green]✓ {result.total} test(s) passed[/green]")
         else:
@@ -749,9 +750,7 @@ def _run_command(cmd: list[str]) -> bool:
     except subprocess.CalledProcessError as exc:
         output = exc.stderr.strip() if exc.stderr else exc.stdout.strip()
         detail = f" ({output})" if output else ""
-        console.print(
-            f"  [red]✗ Command failed ({exc.returncode})[/red]{detail}"
-        )
+        console.print(f"  [red]✗ Command failed ({exc.returncode})[/red]{detail}")
     return False
 
 

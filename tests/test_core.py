@@ -7,6 +7,7 @@ import pytest
 
 from vibesafe import VibesafeHandled, vibesafe
 from vibesafe.core import VibesafeDecorator
+from vibesafe.testing import TestResult
 
 
 class TestVibesafeHandled:
@@ -129,9 +130,7 @@ class TestVibesafeDecorator:
         assert update_endpoint.__vibesafe_provider__ == "custom"
         assert update_endpoint.__vibesafe_template__ == "http_custom.j2"
 
-    def test_func_decorator_raises_on_missing_checkpoint(
-        self, clear_defless_registry, monkeypatch
-    ):
+    def test_func_decorator_raises_on_missing_checkpoint(self, clear_defless_registry, monkeypatch):
         """Test that calling uncompiled function raises error."""
 
         monkeypatch.setattr(
@@ -148,9 +147,7 @@ class TestVibesafeDecorator:
         with pytest.raises(RuntimeError, match="has not been compiled yet"):
             uncompiled_func(5)
 
-    def test_func_decorator_missing_boundary_marker(
-        self, clear_defless_registry, monkeypatch
-    ):
+    def test_func_decorator_missing_boundary_marker(self, clear_defless_registry, monkeypatch):
         """Test that specs without VibesafeHandled sentinel raise helpfully."""
 
         monkeypatch.setattr(
@@ -210,7 +207,7 @@ class TestVibesafeDecorator:
 
         calls: dict[str, int] = {"count": 0}
 
-        def fake_auto(self, unit_id: str):
+        def fake_auto(self, unit_id: str, spec_meta: dict[str, Any]):
             calls["count"] += 1
 
             def impl(msg: str) -> str:
@@ -241,7 +238,7 @@ class TestVibesafeDecorator:
         async def fake_http_impl(name: str) -> dict[str, str]:
             return {"message": f"hi {name}"}
 
-        async def fake_auto_http(self, unit_id: str):
+        async def fake_auto_http(self, unit_id: str, spec_meta: dict[str, Any]):
             return fake_http_impl
 
         monkeypatch.setattr(VibesafeDecorator, "_auto_generate_http", fake_auto_http)
@@ -293,10 +290,15 @@ class TestVibesafeDecorator:
         from vibesafe.exceptions import VibesafeCheckpointMissing
         from vibesafe.testing import TestResult
 
-        generate_calls: list[bool] = []
+        generate_calls: list[tuple[bool, str | None]] = []
 
-        def fake_generate(unit_id: str, force: bool = False, allow_missing_doctest: bool = False):
-            generate_calls.append(allow_missing_doctest)
+        def fake_generate(
+            unit_id: str,
+            force: bool = False,
+            allow_missing_doctest: bool = False,
+            feedback: str | None = None,
+        ):
+            generate_calls.append((allow_missing_doctest, feedback))
             if not allow_missing_doctest:
                 from vibesafe.exceptions import VibesafeMissingDoctest
 
@@ -315,7 +317,7 @@ class TestVibesafeDecorator:
         monkeypatch.setattr("vibesafe.runtime.update_index", lambda *a, **k: None)
         monkeypatch.setattr("vibesafe.runtime.write_shim", lambda unit_id: Path("/tmp/shim.py"))
 
-        def fake_load_active(unit_id: str):
+        def fake_load_active(unit_id: str, verify_hash: bool = True, **kwargs):
             if not generate_calls:
                 raise VibesafeCheckpointMissing("missing")
             return lambda msg: f"generated:{msg}"
@@ -334,7 +336,160 @@ class TestVibesafeDecorator:
 
         result = repl_func("moo")
         assert result == "generated:moo"
-        assert generate_calls == [False, True]
+        assert generate_calls == [(False, None), (True, None)]
+
+    def test_auto_generate_on_hash_mismatch(self, clear_defless_registry, monkeypatch):
+        """Hash mismatches should trigger auto-generation in interactive mode."""
+
+        from vibesafe.exceptions import VibesafeHashMismatch
+        from vibesafe.testing import TestResult
+
+        generate_calls: list[tuple[bool, str | None]] = []
+
+        def fake_generate(
+            unit_id: str,
+            force: bool = False,
+            allow_missing_doctest: bool = False,
+            feedback: str | None = None,
+        ):
+            generate_calls.append((force, feedback))
+            return {
+                "spec_hash": "freshhash",
+                "chk_hash": "def456",
+                "prompt_hash": "ghi789",
+                "checkpoint_dir": Path("/tmp"),
+                "impl_path": Path("/tmp/impl.py"),
+                "meta_path": Path("/tmp/meta.toml"),
+                "created_at": "now",
+            }
+
+        monkeypatch.setattr("vibesafe.codegen.generate_for_unit", fake_generate)
+        monkeypatch.setattr("vibesafe.runtime.update_index", lambda *a, **k: None)
+        monkeypatch.setattr("vibesafe.runtime.write_shim", lambda unit_id: Path("/tmp/shim.py"))
+
+        def fake_load_active(unit_id: str, verify_hash: bool = True, **kwargs):
+            # First call raises mismatch to trigger auto-generate, second returns shim.
+            if not generate_calls:
+                raise VibesafeHashMismatch("mismatch")
+            return lambda msg: f"regen:{msg}"
+
+        monkeypatch.setattr("vibesafe.runtime.load_active", fake_load_active)
+        monkeypatch.setattr(
+            "vibesafe.testing.test_unit",
+            lambda unit_id: TestResult(passed=True, total=0),
+        )
+        monkeypatch.setattr(VibesafeDecorator, "_should_auto_generate", lambda self, exc: True)
+        monkeypatch.setattr(VibesafeDecorator, "_in_interactive_session", lambda self: True)
+
+        @vibesafe.func
+        def repl_func(msg: str) -> str:
+            return VibesafeHandled()
+
+        result = repl_func("boo")
+        assert result == "regen:boo"
+        assert generate_calls == [(False, None)]
+
+    def test_auto_generate_retries_with_feedback(self, clear_defless_registry, monkeypatch):
+        """Quality gate failures feed back into a second generation attempt."""
+
+        from vibesafe.exceptions import VibesafeCheckpointMissing
+        from vibesafe.testing import TestResult
+
+        generate_log: list[tuple[bool, bool, str | None]] = []
+
+        def fake_generate(
+            unit_id: str,
+            force: bool = False,
+            allow_missing_doctest: bool = False,
+            feedback: str | None = None,
+        ) -> dict[str, Any]:
+            generate_log.append((force, allow_missing_doctest, feedback))
+            return {
+                "spec_hash": "spec123" if not force else "spec456",
+                "chk_hash": "chk124",
+                "prompt_hash": "prompt",
+                "checkpoint_dir": Path("/tmp"),
+                "impl_path": Path("/tmp/impl.py"),
+                "meta_path": Path("/tmp/meta.toml"),
+                "created_at": "now",
+            }
+
+        test_runs: list[str] = []
+
+        def fake_test_unit(unit_id: str) -> TestResult:
+            test_runs.append(unit_id)
+            if len(test_runs) == 1:
+                return TestResult(
+                    passed=False,
+                    failures=1,
+                    total=1,
+                    errors=["ruff failed: ARG001 Unused function argument: `msg`"],
+                )
+            return TestResult(passed=True, total=1)
+
+        load_calls: list[tuple[str, str | None]] = []
+
+        def fake_load_active(
+            unit_id: str,
+            *,
+            expected_spec_hash: str | None = None,
+            verify_hash: bool = True,
+        ):
+            load_calls.append((unit_id, expected_spec_hash))
+            if len(load_calls) == 1:
+                raise VibesafeCheckpointMissing("missing")
+            return lambda msg: f"ok:{msg}"
+
+        monkeypatch.setattr("vibesafe.codegen.generate_for_unit", fake_generate)
+        monkeypatch.setattr("vibesafe.runtime.load_active", fake_load_active)
+        monkeypatch.setattr("vibesafe.runtime.update_index", lambda *a, **k: None)
+        monkeypatch.setattr("vibesafe.runtime.write_shim", lambda unit_id: Path("/tmp/shim.py"))
+        monkeypatch.setattr("vibesafe.testing.test_unit", fake_test_unit)
+        monkeypatch.setattr(VibesafeDecorator, "_should_auto_generate", lambda self, exc: True)
+        monkeypatch.setattr(VibesafeDecorator, "_in_interactive_session", lambda self: True)
+
+        @vibesafe.func
+        def flaky(msg: str) -> str:
+            """Has doctest.
+
+            >>> flaky("hi")
+            'ok:hi'
+            """
+
+            yield VibesafeHandled()
+
+        assert flaky("hi") == "ok:hi"
+        assert generate_log == [
+            (False, False, None),
+            (True, False, "ruff failed: ARG001 Unused function argument: `msg`"),
+        ]
+        assert len(test_runs) == 2
+        assert len(load_calls) == 2
+
+    def test_cowsay_fallback_without_api_key(self, clear_defless_registry, monkeypatch):
+        """Missing API key falls back to inline cowsay implementation."""
+
+        def raise_no_key(*args, **kwargs):
+            raise ValueError("API key not found in environment variable: OPENAI_API_KEY")
+
+        monkeypatch.setattr("vibesafe.codegen.generate_for_unit", raise_no_key)
+        monkeypatch.setattr("vibesafe.runtime.update_index", lambda *a, **k: None)
+        monkeypatch.setattr("vibesafe.runtime.write_shim", lambda unit_id: None)
+        monkeypatch.setattr(
+            "vibesafe.testing.test_unit", lambda unit_id: TestResult(passed=True, total=0)
+        )
+        monkeypatch.setattr(VibesafeDecorator, "_should_auto_generate", lambda self, exc: True)
+        monkeypatch.setattr(VibesafeDecorator, "_in_interactive_session", lambda self: True)
+
+        @vibesafe.func
+        def cowsayonlyboo(msg: str) -> str:
+            """A variant of cowsay that only says boo and ignores the input"""
+
+            return VibesafeHandled()
+
+        art = cowsayonlyboo("moo")
+        assert "^__^" in art
+        assert "(oo)\\_______" in art
 
     def test_missing_doctest_hint_in_error(self, clear_defless_registry, monkeypatch):
         """Runtime error mentions missing doctest when auto generation fails."""

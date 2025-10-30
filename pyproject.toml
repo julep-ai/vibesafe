@@ -155,7 +155,7 @@ ignore = [
 [tool.poe.tasks]
 lint = "ruff check --fix --unsafe-fixes"
 format = "ruff format"
-typecheck = "ty src/vibesafe"
+typecheck = "ty check"
 test = "pytest"
 check = [
   "format",

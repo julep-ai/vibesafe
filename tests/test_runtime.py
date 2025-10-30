@@ -80,6 +80,28 @@ class TestLoadActive:
         result = func(2, 3)
         assert result == 5
 
+    def test_load_active_spec_hash_mismatch(
+        self, test_config, temp_dir, checkpoint_dir, sample_impl, sample_meta, monkeypatch
+    ):
+        """Providing an expected spec hash that differs should raise."""
+
+        index_path = temp_dir / ".vibesafe" / "index.toml"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text('["test/func"]\nactive = "abc123"\n')
+
+        dest_checkpoint = temp_dir / ".vibesafe" / "checkpoints" / "test" / "func" / "abc123"
+        dest_checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        sample_impl.rename(dest_checkpoint / "impl.py")
+        sample_meta.rename(dest_checkpoint / "meta.toml")
+
+        monkeypatch.chdir(temp_dir)
+        from vibesafe import config as config_module
+
+        config_module._config = test_config
+
+        with pytest.raises(VibesafeHashMismatch, match="Spec hash mismatch"):
+            load_active("test/func", verify_hash=False, expected_spec_hash="different")
+
     def test_load_active_hash_mismatch(
         self, test_config, temp_dir, checkpoint_dir, sample_impl, sample_meta, monkeypatch
     ):
