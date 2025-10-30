@@ -111,7 +111,7 @@ jobs:
           if len(failures) > 40000:
               failures = failures[-40000:]
 
-          prompt = f"""You are analyzing test failures for the Defless project - an AI-powered code generation system.
+          prompt = f"""You are analyzing test failures for the Vibesafe project - an AI-powered code generation system.
 
           Please analyze the following test failures and provide:
           1. Root cause analysis (what likely caused the failure)

@@ -1,8 +1,8 @@
-# Defless
+# Vibesafe
 
 **Vibe safely** - AI-powered code generation with verifiable specs.
 
-Defless is a developer-facing system that lets engineers write readable specs as Python code that AI fills in. It creates a verifiable, hash-locked boundary between human intent and generated code, while keeping iteration and integration friction-free.
+Vibesafe is a developer-facing system that lets engineers write readable specs as Python code that AI fills in. It creates a verifiable, hash-locked boundary between human intent and generated code, while keeping iteration and integration friction-free.
 
 ## Core Goals
 
@@ -29,9 +29,9 @@ pip install -e .
 
 ```python
 # examples/math/ops.py
-from defless import defless, DeflessHandled
+from vibesafe import vibesafe, VibesafeHandled
 
-@defless.func
+@vibesafe.func
 def sum_str(a: str, b: str) -> str:
     """
     Add two integers represented as strings.
@@ -42,13 +42,13 @@ def sum_str(a: str, b: str) -> str:
     '30'
     """
     a_int, b_int = int(a), int(b)
-    yield DeflessHandled()
+    yield VibesafeHandled()
 ```
 
-2. **Configure defless:**
+2. **Configure vibesafe:**
 
 ```toml
-# defless.toml
+# vibesafe.toml
 [provider.default]
 kind = "openai-compatible"
 model = "gpt-4o-mini"
@@ -62,10 +62,10 @@ api_key_env = "OPENAI_API_KEY"
 export OPENAI_API_KEY="your-key-here"
 
 # Compile the function
-defless compile --target examples.math.ops/sum_str
+vibesafe compile --target examples.math.ops/sum_str
 
 # Test it
-defless test --target examples.math.ops/sum_str
+vibesafe test --target examples.math.ops/sum_str
 
 # Use it in code
 from __generated__.examples.math.ops import sum_str
@@ -77,8 +77,8 @@ print(sum_str("5", "7"))  # "12"
 ### Phase 1 (MVP) - Implemented ✅
 
 - ✅ Python 3.12+ support
-- ✅ Pure functions with `@defless.func`
-- ✅ HTTP endpoints with `@defless.http` (FastAPI)
+- ✅ Pure functions with `@vibesafe.func`
+- ✅ HTTP endpoints with `@vibesafe.http` (FastAPI)
 - ✅ Doctest-based verification
 - ✅ Hash-locked checkpoints
 - ✅ OpenAI-compatible providers
@@ -97,60 +97,60 @@ print(sum_str("5", "7"))  # "12"
 
 ## CLI Commands
 
-### `defless scan`
+### `vibesafe scan`
 
-List all defless units in the project:
+List all vibesafe units in the project:
 
 ```bash
-defless scan
-defless scan --write-shims  # Also generate __generated__ shims
+vibesafe scan
+vibesafe scan --write-shims  # Also generate __generated__ shims
 ```
 
-### `defless compile`
+### `vibesafe compile`
 
 Generate implementations:
 
 ```bash
-defless compile                        # Compile all units
-defless compile --target MODULE        # Compile specific module
-defless compile --target UNIT_ID       # Compile specific unit
-defless compile --force                # Force recompilation
+vibesafe compile                        # Compile all units
+vibesafe compile --target MODULE        # Compile specific module
+vibesafe compile --target UNIT_ID       # Compile specific unit
+vibesafe compile --force                # Force recompilation
 ```
 
-### `defless test`
+### `vibesafe test`
 
 Run doctest verification:
 
 ```bash
-defless test                  # Test all units
-defless test --target UNIT_ID # Test specific unit
+vibesafe test                  # Test all units
+vibesafe test --target UNIT_ID # Test specific unit
 ```
 
-### `defless save`
+### `vibesafe save`
 
 Activate checkpoints (after tests pass):
 
 ```bash
-defless save                  # Save all (if all tests pass)
-defless save --target UNIT_ID # Save specific unit
+vibesafe save                  # Save all (if all tests pass)
+vibesafe save --target UNIT_ID # Save specific unit
 ```
 
 ## Architecture
 
 ```
 project/
-├── defless.toml           # Configuration
+├── vibesafe.toml          # Configuration
 ├── prompts/
 │   ├── function.j2        # Function prompt template
 │   └── http_endpoint.j2   # HTTP endpoint template
 ├── examples/
 │   └── math/
-│       └── ops.py         # Spec with @defless.func
+│       └── ops.py         # Spec with @vibesafe.func
 ├── __generated__/         # Generated shims
 │   └── examples/
 │       └── math/
 │           └── ops.py     # Auto-generated imports
-└── .defless/
+└── .vibesafe/
     ├── checkpoints/       # Implementation checkpoints
     │   └── examples/math/ops/sum_str/
     │       └── <hash>/
@@ -162,17 +162,17 @@ project/
 
 ## How It Works
 
-1. **Spec Definition**: Mark functions with `@defless.func` or `@defless.http`
-2. **AST Extraction**: Parse signature, docstring, and pre-DeflessHandled body
+1. **Spec Definition**: Mark functions with `@vibesafe.func` or `@vibesafe.http`
+2. **AST Extraction**: Parse signature, docstring, and pre-VibesafeHandled body
 3. **Hash Computation**: Create deterministic hash from spec + model + template
 4. **Code Generation**: Render prompt via Jinja2, call LLM with seed
 5. **Verification**: Run doctests against generated implementation
-6. **Checkpoint Storage**: Save implementation with metadata in `.defless/`
+6. **Checkpoint Storage**: Save implementation with metadata in `.vibesafe/`
 7. **Runtime Loading**: `__generated__` shims load active checkpoints
 
 ## Configuration
 
-See `defless.toml` for full configuration options:
+See `vibesafe.toml` for full configuration options:
 
 - **Provider settings**: Model, temperature, API keys
 - **Path configuration**: Where checkpoints and cache are stored
@@ -199,13 +199,13 @@ pytest
 pytest -n auto
 
 # Type checking
-mypy src/defless
+mypy src/vibesafe
 
 # Linting
-ruff check src/defless
+ruff check src/vibesafe
 
 # Format code
-ruff format src/defless
+ruff format src/vibesafe
 ```
 
 ## CI/CD

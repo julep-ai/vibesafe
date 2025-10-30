@@ -1,11 +1,11 @@
 """
-Example defless HTTP endpoints.
+Example vibesafe HTTP endpoints.
 """
 
-from defless import DeflessHandled, defless
+from vibesafe import VibesafeHandled, vibesafe
 
 
-@defless.http(method="POST", path="/sum")
+@vibesafe.http(method="POST", path="/sum")
 async def sum_endpoint(a: int, b: int) -> dict[str, int]:
     """
     Add two numbers and return the result.
@@ -18,10 +18,10 @@ async def sum_endpoint(a: int, b: int) -> dict[str, int]:
     >>> anyio.run(sum_endpoint, 10, 20)
     {'sum': 30}
     """
-    return DeflessHandled()
+    return VibesafeHandled()
 
 
-@defless.http(method="GET", path="/hello/{name}")
+@vibesafe.http(method="GET", path="/hello/{name}")
 async def hello_endpoint(name: str) -> dict[str, str]:
     """
     Greet a user by name.
@@ -32,4 +32,4 @@ async def hello_endpoint(name: str) -> dict[str, str]:
     >>> anyio.run(hello_endpoint, "Bob")
     {'message': 'Hello, Bob!'}
     """
-    return DeflessHandled()
+    return VibesafeHandled()

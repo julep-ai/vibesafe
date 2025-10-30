@@ -1,5 +1,5 @@
 [project]
-name = "defless"
+name = "vibesafe"
 version = "0.1.0"
 description = "Vibe safely"
 readme = "README.md"
@@ -33,7 +33,7 @@ dev = [
 ]
 
 [project.scripts]
-defless = "defless.cli:main"
+vibesafe = "vibesafe.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]
@@ -50,7 +50,7 @@ addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
-    "--cov=src/defless",
+    "--cov=src/vibesafe",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-report=xml",
@@ -63,7 +63,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src/defless"]
+source = ["src/vibesafe"]
 omit = ["*/tests/*", "*/test_*.py"]
 
 [tool.coverage.report]
@@ -129,4 +129,4 @@ ignore = [
 "__init__.py" = ["F401"]  # Allow unused imports in __init__.py
 "tests/**/*.py" = ["ARG", "S101", "F841", "E721"]  # Allow unused args, asserts, vars in tests
 "examples/**/*.py" = ["ARG", "F841"]  # Allow unused args and vars in example specs
-"src/defless/mcp.py" = ["ARG002"]  # MCP handlers require params even if unused
+"src/vibesafe/mcp.py" = ["ARG002"]  # MCP handlers require params even if unused

@@ -1,12 +1,12 @@
 """
-Tests for defless.cli module.
+Tests for vibesafe.cli module.
 """
 
 import pytest
 from click.testing import CliRunner
 
-from defless import DeflessHandled, defless
-from defless.cli import compile, main, save, scan, test
+from vibesafe import VibesafeHandled, vibesafe
+from vibesafe.cli import compile, main, save, scan, test
 
 
 class TestCLI:
@@ -21,7 +21,7 @@ class TestCLI:
         """Test main command help."""
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
-        assert "Defless" in result.output
+        assert "Vibesafe" in result.output
 
     def test_main_version(self, runner):
         """Test version flag."""
@@ -33,15 +33,15 @@ class TestCLI:
         """Test scan with no units."""
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(scan)
-        assert "No defless units found" in result.output
+        assert "No vibesafe units found" in result.output
 
     def test_scan_with_units(self, runner, temp_dir, monkeypatch, clear_defless_registry):
         """Test scan with registered units."""
 
-        @defless.func
+        @vibesafe.func
         def test_func(x: int) -> int:
             """Test."""
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(scan)
@@ -53,7 +53,7 @@ class TestCLI:
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(compile)
         assert result.exit_code == 1
-        assert "No defless units found" in result.output
+        assert "No vibesafe units found" in result.output
 
     def test_compile_help(self, runner):
         """Test compile command help."""

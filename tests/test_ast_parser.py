@@ -1,9 +1,9 @@
 """
-Tests for defless.ast_parser module.
+Tests for vibesafe.ast_parser module.
 """
 
-from defless import DeflessHandled, defless
-from defless.ast_parser import SpecExtractor, extract_spec
+from vibesafe import VibesafeHandled, vibesafe
+from vibesafe.ast_parser import SpecExtractor, extract_spec
 
 
 class TestSpecExtractor:
@@ -62,14 +62,14 @@ class TestSpecExtractor:
         assert "Second line." in docstring
 
     def test_extract_body_before_handled(self, clear_defless_registry):
-        """Test extracting body before DeflessHandled."""
+        """Test extracting body before VibesafeHandled."""
 
-        @defless.func
+        @vibesafe.func
         def body_func(x: int) -> int:
             """Test."""
             x = x + 1
             y = x * 2
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
         extractor = SpecExtractor(body_func)
         body = extractor.extract_body_before_handled()
@@ -100,7 +100,7 @@ class TestSpecExtractor:
 
         def dep_func(x: int) -> int:
             """Test."""
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
         extractor = SpecExtractor(dep_func)
         deps = extractor.extract_dependencies()
@@ -110,7 +110,7 @@ class TestSpecExtractor:
     def test_to_dict(self, clear_defless_registry):
         """Test converting extraction to dictionary."""
 
-        @defless.func
+        @vibesafe.func
         def complete_func(a: int, b: int) -> int:
             """
             Add two numbers.
@@ -118,7 +118,7 @@ class TestSpecExtractor:
             >>> complete_func(2, 3)
             5
             """
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
         extractor = SpecExtractor(complete_func)
         spec_dict = extractor.to_dict()

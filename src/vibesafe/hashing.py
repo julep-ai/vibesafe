@@ -5,7 +5,7 @@ Hash computation for specs and checkpoints.
 import hashlib
 import inspect
 
-from defless import __version__
+from vibesafe import __version__
 
 
 def compute_spec_hash(
@@ -22,8 +22,8 @@ def compute_spec_hash(
     H_spec = sha256(
         signature
         + normalized_docstring
-        + body_before_DeflessHandled
-        + defless_version
+        + body_before_VibesafeHandled
+        + vibesafe_version
         + template_id
         + provider_model
         + dependency_digest
@@ -32,7 +32,7 @@ def compute_spec_hash(
     Args:
         signature: Function signature string
         docstring: Normalized docstring
-        body_before_handled: Code before DeflessHandled() marker
+        body_before_handled: Code before VibesafeHandled() marker
         template_id: Template identifier (e.g., "function.j2")
         provider_model: Provider model string (e.g., "gpt-4o-mini")
         dependency_digest: Hash of dependencies

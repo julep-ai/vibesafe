@@ -1,10 +1,10 @@
-# Defless Usage Skill
+# Vibesafe Usage Skill
 
-Expert skill for using Defless - an AI-powered code generation system with verifiable, hash-locked specs.
+Expert skill for using Vibesafe - an AI-powered code generation system with verifiable, hash-locked specs.
 
 ## Overview
 
-Defless lets developers write readable specs as Python code that AI fills in. It creates a verifiable boundary between human intent and generated code with test-driven iteration.
+Vibesafe lets developers write readable specs as Python code that AI fills in. It creates a verifiable boundary between human intent and generated code with test-driven iteration.
 
 **Core concept:** Write a spec with doctests → AI generates implementation → Tests verify → Use in production
 
@@ -14,15 +14,15 @@ Defless lets developers write readable specs as Python code that AI fills in. It
 
 ```bash
 # With uv (recommended)
-uv pip install defless
+uv pip install vibesafe
 
 # With pip
-pip install defless
+pip install vibesafe
 ```
 
 ### Project Setup
 
-1. **Create defless.toml configuration:**
+1. **Create vibesafe.toml configuration:**
 ```toml
 [project]
 python = ">=3.12"
@@ -37,9 +37,9 @@ base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
 
 [paths]
-checkpoints = ".defless/checkpoints"
-cache = ".defless/cache"
-index = ".defless/index.toml"
+checkpoints = ".vibesafe/checkpoints"
+cache = ".vibesafe/cache"
+index = ".vibesafe/index.toml"
 generated = "__generated__"
 
 [prompts]
@@ -52,9 +52,9 @@ http = "prompts/http_endpoint.j2"
 export OPENAI_API_KEY="your-api-key-here"
 ```
 
-3. **Add .defless/ to .gitignore:**
+3. **Add .vibesafe/ to .gitignore:**
 ```gitignore
-.defless/cache/      # LLM response cache (optional)
+.vibesafe/cache/      # LLM response cache (optional)
 __generated__/       # Generated shims (optional)
 ```
 
@@ -63,9 +63,9 @@ __generated__/       # Generated shims (optional)
 ### Pure Functions
 
 ```python
-from defless import defless, DeflessHandled
+from vibesafe import vibesafe, VibesafeHandled
 
-@defless.func
+@vibesafe.func
 def fibonacci(n: int) -> int:
     """
     Return the nth Fibonacci number (0-indexed).
@@ -81,22 +81,22 @@ def fibonacci(n: int) -> int:
     """
     if n < 0:
         raise ValueError("n must be non-negative")
-    yield DeflessHandled()
+    yield VibesafeHandled()
 ```
 
 **Key components:**
-1. **Decorator:** `@defless.func` marks function for generation
+1. **Decorator:** `@vibesafe.func` marks function for generation
 2. **Type hints:** Provides signature to AI
 3. **Docstring with doctests:** Specifies behavior with examples
-4. **Pre-DeflessHandled code:** Setup/validation before AI takes over
-5. **DeflessHandled marker:** Where AI-generated code begins
+4. **Pre-VibesafeHandled code:** Setup/validation before AI takes over
+5. **VibesafeHandled marker:** Where AI-generated code begins
 
 ### HTTP Endpoints (FastAPI)
 
 ```python
-from defless import defless, DeflessHandled
+from vibesafe import vibesafe, VibesafeHandled
 
-@defless.http(method="POST", path="/calculate")
+@vibesafe.http(method="POST", path="/calculate")
 async def calculate_endpoint(a: int, b: int, op: str) -> dict[str, int]:
     """
     Perform arithmetic operation on two numbers.
@@ -110,14 +110,14 @@ async def calculate_endpoint(a: int, b: int, op: str) -> dict[str, int]:
     valid_ops = ["add", "subtract", "multiply", "divide"]
     if op not in valid_ops:
         raise ValueError(f"Invalid operation: {op}")
-    return DeflessHandled()
+    return VibesafeHandled()
 ```
 
 **HTTP-specific features:**
 - `method`: HTTP method (GET, POST, PUT, DELETE, etc.)
 - `path`: URL path (can include path parameters)
 - `async def`: Must be async for endpoints
-- Return `DeflessHandled()` (not yield)
+- Return `VibesafeHandled()` (not yield)
 
 ### Best Practices for Specs
 
@@ -125,7 +125,7 @@ async def calculate_endpoint(a: int, b: int, op: str) -> dict[str, int]:
 - Write clear, comprehensive docstrings
 - Include 3-5 doctest examples covering edge cases
 - Add type hints for all parameters and returns
-- Include validation/setup code before `DeflessHandled()`
+- Include validation/setup code before `VibesafeHandled()`
 - Test edge cases (empty inputs, negatives, None, etc.)
 
 ❌ **DON'T:**
@@ -139,11 +139,11 @@ async def calculate_endpoint(a: int, b: int, op: str) -> dict[str, int]:
 ### Scan for Units
 
 ```bash
-# List all defless-decorated functions
-defless scan
+# List all vibesafe-decorated functions
+vibesafe scan
 
 # List and generate shims
-defless scan --write-shims
+vibesafe scan --write-shims
 ```
 
 **Output shows:**
@@ -156,16 +156,16 @@ defless scan --write-shims
 
 ```bash
 # Compile all units
-defless compile
+vibesafe compile
 
 # Compile specific unit
-defless compile --target app.math.ops/fibonacci
+vibesafe compile --target app.math.ops/fibonacci
 
 # Compile entire module
-defless compile --target app.math.ops
+vibesafe compile --target app.math.ops
 
 # Force recompilation
-defless compile --force
+vibesafe compile --force
 ```
 
 **What happens:**
@@ -181,10 +181,10 @@ defless compile --force
 
 ```bash
 # Test all units
-defless test
+vibesafe test
 
 # Test specific unit
-defless test --target app.math.ops/fibonacci
+vibesafe test --target app.math.ops/fibonacci
 ```
 
 **Tests run:**
@@ -196,10 +196,10 @@ defless test --target app.math.ops/fibonacci
 
 ```bash
 # Save all (only if all tests pass)
-defless save
+vibesafe save
 
 # Save specific unit
-defless save --target app.math.ops/fibonacci
+vibesafe save --target app.math.ops/fibonacci
 ```
 
 **Save means:**
@@ -238,16 +238,16 @@ result = fibonacci(10)
 vim app/math/ops.py
 
 # 2. Scan to verify registration
-defless scan
+vibesafe scan
 
 # 3. Compile to generate code
-defless compile --target app.math.ops/fibonacci
+vibesafe compile --target app.math.ops/fibonacci
 
 # 4. Test the implementation
-defless test --target app.math.ops/fibonacci
+vibesafe test --target app.math.ops/fibonacci
 
 # 5. If tests pass, save/activate
-defless save --target app.math.ops/fibonacci
+vibesafe save --target app.math.ops/fibonacci
 
 # 6. Use in code
 python -c "from app.math.ops import fibonacci; print(fibonacci(10))"
@@ -257,16 +257,16 @@ python -c "from app.math.ops import fibonacci; print(fibonacci(10))"
 
 ```bash
 # 1. Check what failed
-defless test --target app.math.ops/fibonacci
+vibesafe test --target app.math.ops/fibonacci
 
 # 2. Update spec (add more examples, clarify docstring)
 vim app/math/ops.py
 
 # 3. Recompile with force
-defless compile --target app.math.ops/fibonacci --force
+vibesafe compile --target app.math.ops/fibonacci --force
 
 # 4. Test again
-defless test --target app.math.ops/fibonacci
+vibesafe test --target app.math.ops/fibonacci
 
 # 5. Repeat until tests pass
 ```
@@ -275,13 +275,13 @@ defless test --target app.math.ops/fibonacci
 
 ```bash
 # Compile all functions in a module
-defless compile --target app.math
+vibesafe compile --target app.math
 
 # Test everything
-defless test
+vibesafe test
 
 # Save everything (only if all pass)
-defless save
+vibesafe save
 ```
 
 ## Understanding the System
@@ -290,7 +290,7 @@ defless save
 
 ```
 myproject/
-├── defless.toml           # Configuration
+├── vibesafe.toml           # Configuration
 ├── app/
 │   └── math/
 │       └── ops.py         # Your specs
@@ -298,7 +298,7 @@ myproject/
 │   └── app/
 │       └── math/
 │           └── ops.py     # import from here
-└── .defless/
+└── .vibesafe/
     ├── checkpoints/       # Generated implementations
     │   └── app/math/ops/fibonacci/
     │       └── <hash>/
@@ -313,8 +313,8 @@ myproject/
 **Spec Hash:** Deterministically computed from:
 - Function signature
 - Docstring
-- Pre-DeflessHandled body
-- Defless version
+- Pre-VibesafeHandled body
+- Vibesafe version
 - Template ID
 - Provider model
 - Dependencies
@@ -353,10 +353,10 @@ api_key_env = "ANTHROPIC_API_KEY"
 
 Use with decorator:
 ```python
-@defless.func(provider="anthropic")
+@vibesafe.func(provider="anthropic")
 def my_function(x: int) -> int:
     """Uses Anthropic provider."""
-    yield DeflessHandled()
+    yield VibesafeHandled()
 ```
 
 ### Custom Templates
@@ -379,36 +379,36 @@ Expected: {{ example.want }}
 
 Use with decorator:
 ```python
-@defless.func(template="prompts/my_template.j2")
+@vibesafe.func(template="prompts/my_template.j2")
 def my_function(x: int) -> int:
     """Uses custom template."""
-    yield DeflessHandled()
+    yield VibesafeHandled()
 ```
 
 ### Inspecting Generated Code
 
 ```bash
 # Find the checkpoint directory
-ls .defless/checkpoints/app/math/ops/fibonacci/
+ls .vibesafe/checkpoints/app/math/ops/fibonacci/
 
 # Read the implementation
-cat .defless/checkpoints/app/math/ops/fibonacci/<hash>/impl.py
+cat .vibesafe/checkpoints/app/math/ops/fibonacci/<hash>/impl.py
 
 # Read metadata
-cat .defless/checkpoints/app/math/ops/fibonacci/<hash>/meta.toml
+cat .vibesafe/checkpoints/app/math/ops/fibonacci/<hash>/meta.toml
 ```
 
 ### Cache Management
 
 ```bash
 # View cache size
-du -sh .defless/cache/
+du -sh .vibesafe/cache/
 
 # Clear cache (will regenerate on next compile)
-rm -rf .defless/cache/
+rm -rf .vibesafe/cache/
 
 # Cache is keyed by prompt hash
-ls .defless/cache/
+ls .vibesafe/cache/
 ```
 
 ## Troubleshooting
@@ -422,9 +422,9 @@ RuntimeError: Function app.math.ops/fibonacci has not been compiled yet
 
 **Solution:**
 ```bash
-defless compile --target app.math.ops/fibonacci
-defless test --target app.math.ops/fibonacci
-defless save --target app.math.ops/fibonacci
+vibesafe compile --target app.math.ops/fibonacci
+vibesafe test --target app.math.ops/fibonacci
+vibesafe save --target app.math.ops/fibonacci
 ```
 
 ### Tests Failing
@@ -434,7 +434,7 @@ defless save --target app.math.ops/fibonacci
 **Solutions:**
 1. **Add more doctest examples** to clarify behavior
 2. **Improve docstring** to be more explicit
-3. **Add pre-DeflessHandled setup** code to show context
+3. **Add pre-VibesafeHandled setup** code to show context
 4. **Check doctest format** - must be exact
 5. **Force recompile** with different seed:
 ```toml
@@ -449,13 +449,13 @@ seed = 43  # Try different seed
 **Solution:**
 ```bash
 # Regenerate shims
-defless scan --write-shims
+vibesafe scan --write-shims
 
 # Check index
-cat .defless/index.toml
+cat .vibesafe/index.toml
 
 # Verify checkpoint exists
-defless scan
+vibesafe scan
 ```
 
 ### API Key Issues
@@ -467,7 +467,7 @@ defless scan
 # Set environment variable matching config
 export OPENAI_API_KEY="your-key"
 
-# Or update defless.toml
+# Or update vibesafe.toml
 api_key_env = "CUSTOM_API_KEY"
 export CUSTOM_API_KEY="your-key"
 ```
@@ -490,13 +490,13 @@ This means generated code was modified. Either:
 2. **Cover edge cases:** Empty inputs, None, negatives, large values
 3. **Use doctest ELLIPSIS:** For long outputs: `{...}`
 4. **Type everything:** Full type hints help AI generate better code
-5. **Document pre-conditions:** Use pre-DeflessHandled code
+5. **Document pre-conditions:** Use pre-VibesafeHandled code
 
 ### Compilation Strategy
 
 1. **Compile incrementally:** Test individual functions before batch
 2. **Use force sparingly:** Only when spec changes
-3. **Version control checkpoints:** Consider committing .defless/checkpoints
+3. **Version control checkpoints:** Consider committing .vibesafe/checkpoints
 4. **Review generated code:** Inspect before production use
 
 ### Testing Strategy
@@ -508,8 +508,8 @@ This means generated code was modified. Either:
 
 ### Production Deployment
 
-1. **Commit .defless/checkpoints:** For reproducibility
-2. **Use prod mode:** Set `env = "prod"` in defless.toml
+1. **Commit .vibesafe/checkpoints:** For reproducibility
+2. **Use prod mode:** Set `env = "prod"` in vibesafe.toml
 3. **Pin provider model:** Specify exact model version
 4. **Monitor hash integrity:** Check logs for mismatches
 5. **Version generated code:** Tag releases
@@ -517,16 +517,16 @@ This means generated code was modified. Either:
 ## When to Use This Skill
 
 ✅ **Use this skill when:**
-- Writing defless spec functions
-- Generating implementations with defless
+- Writing vibesafe spec functions
+- Generating implementations with vibesafe
 - Testing generated code
-- Debugging defless issues
-- Setting up defless projects
+- Debugging vibesafe issues
+- Setting up vibesafe projects
 - Iterating on specs
 
 ❌ **Don't use for:**
-- Building the defless library itself
-- Modifying defless source code
+- Building the vibesafe library itself
+- Modifying vibesafe source code
 - Non-Python languages
 - Stateful/side-effectful code (use with caution)
 
@@ -537,10 +537,10 @@ This means generated code was modified. Either:
 export OPENAI_API_KEY="key"
 
 # Workflow
-defless scan                              # List units
-defless compile --target module/func     # Generate
-defless test --target module/func        # Test
-defless save --target module/func        # Activate
+vibesafe scan                              # List units
+vibesafe compile --target module/func     # Generate
+vibesafe test --target module/func        # Test
+vibesafe save --target module/func        # Activate
 
 # Flags
 --force                                   # Force recompile
@@ -552,6 +552,6 @@ from __generated__.module import func    # Use generated code
 
 ## Resources
 
-- Repository: https://github.com/julep-ai/defless
+- Repository: https://github.com/julep-ai/vibesafe
 - Examples: See `examples/` directory
 - Templates: See `prompts/` directory

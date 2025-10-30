@@ -1,1 +1,1 @@
-"""Example defless implementations."""
+"""Example vibesafe implementations."""

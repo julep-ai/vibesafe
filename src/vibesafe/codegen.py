@@ -13,16 +13,16 @@ else:
 
 from jinja2 import Environment, FileSystemLoader
 
-from defless import __version__
-from defless.ast_parser import extract_spec
-from defless.config import get_config
-from defless.hashing import (
+from vibesafe import __version__
+from vibesafe.ast_parser import extract_spec
+from vibesafe.config import get_config
+from vibesafe.hashing import (
     compute_checkpoint_hash,
     compute_dependency_digest,
     compute_prompt_hash,
     compute_spec_hash,
 )
-from defless.providers import get_provider
+from vibesafe.providers import get_provider
 
 
 class CodeGenerator:
@@ -126,7 +126,7 @@ class CodeGenerator:
             "dependencies": self.spec["dependencies"],
             "unit_id": self.unit_id,
             "unit_meta": self.unit_meta,
-            "defless_version": __version__,
+            "vibesafe_version": __version__,
         }
 
         return template.render(**context)
@@ -156,11 +156,11 @@ class CodeGenerator:
 
         # Write metadata
         meta_path = checkpoint_dir / "meta.toml"
-        meta_content = f"""# Defless checkpoint metadata
+        meta_content = f"""# Vibesafe checkpoint metadata
 spec_sha = "{spec_hash}"
 chk_sha = "{chk_hash}"
 prompt_sha = "{prompt_hash}"
-defless_version = "{__version__}"
+vibesafe_version = "{__version__}"
 provider = "{self.provider_config.kind}:{self.provider_config.model}"
 template = "{self.unit_meta.get("template", "function.j2")}"
 
@@ -208,9 +208,9 @@ def generate_for_unit(unit_id: str, force: bool = False) -> dict[str, Any]:
     Returns:
         Checkpoint info dictionary
     """
-    from defless.core import defless
+    from vibesafe.core import vibesafe
 
-    unit_meta = defless.get_unit(unit_id)
+    unit_meta = vibesafe.get_unit(unit_id)
     if not unit_meta:
         raise ValueError(f"Unit not found: {unit_id}")
 

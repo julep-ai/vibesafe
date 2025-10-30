@@ -1,9 +1,9 @@
 """
-Tests for defless.mcp module.
+Tests for vibesafe.mcp module.
 """
 
-from defless import DeflessHandled, defless
-from defless.mcp import MCPServer
+from vibesafe import VibesafeHandled, vibesafe
+from vibesafe.mcp import MCPServer
 
 
 class TestMCPServer:
@@ -32,10 +32,10 @@ class TestMCPServer:
     def test_handle_request_scan(self, clear_defless_registry):
         """Test handling scan request."""
 
-        @defless.func
+        @vibesafe.func
         def test_func(x: int) -> int:
             """Test."""
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
         server = MCPServer()
         request = {"jsonrpc": "2.0", "method": "scan", "params": {}, "id": 1}
@@ -78,13 +78,13 @@ class TestMCPServer:
     def test_scan_method(self, clear_defless_registry):
         """Test scan method."""
 
-        @defless.func
+        @vibesafe.func
         def func1(x: int) -> int:
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
-        @defless.func
+        @vibesafe.func
         def func2(y: str) -> str:
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
         server = MCPServer()
         result = server.scan({})

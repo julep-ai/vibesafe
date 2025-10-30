@@ -60,7 +60,7 @@ jobs:
           if len(diff) > 50000:
               diff = diff[:50000] + "\n\n... (diff truncated)"
 
-          prompt = f"""You are reviewing a pull request for the Defless project - an AI-powered code generation system with hash-locked verification.
+          prompt = f"""You are reviewing a pull request for the Vibesafe project - an AI-powered code generation system with hash-locked verification.
 
           Please review the following code changes and provide:
           1. A brief summary of the changes (2-3 sentences)

@@ -70,10 +70,10 @@ class SpecExtractor:
 
     def extract_body_before_handled(self) -> str:
         """
-        Extract function body code before DeflessHandled() marker.
+        Extract function body code before VibesafeHandled() marker.
 
         Returns:
-            Code string before yield/return DeflessHandled()
+            Code string before yield/return VibesafeHandled()
         """
         source_lines = self.source.split("\n")
 
@@ -103,11 +103,11 @@ class SpecExtractor:
                         body_start = i + 1
                         break
 
-        # Extract body lines before DeflessHandled
+        # Extract body lines before VibesafeHandled
         body_lines = []
         for i in range(body_start, len(source_lines)):
             line = source_lines[i]
-            if "DeflessHandled" in line:
+            if "VibesafeHandled" in line:
                 break
             # Only include lines with actual content (strip empty/whitespace)
             if line.strip():

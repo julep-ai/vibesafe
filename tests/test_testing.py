@@ -1,9 +1,9 @@
 """
-Tests for defless.testing module.
+Tests for vibesafe.testing module.
 """
 
-from defless import DeflessHandled, defless
-from defless.testing import TestResult, test_checkpoint, test_unit
+from vibesafe import VibesafeHandled, vibesafe
+from vibesafe.testing import TestResult, test_checkpoint, test_unit
 
 
 class TestTestResult:
@@ -60,7 +60,7 @@ class TestTestCheckpoint:
     ):
         """Test checkpoint with no doctests passes."""
 
-        @defless.func
+        @vibesafe.func
         def no_doctest_func(x: int) -> int:
             """Function without doctests."""
             return x
@@ -79,7 +79,7 @@ class TestTestCheckpoint:
     ):
         """Test checkpoint with passing doctests."""
 
-        @defless.func
+        @vibesafe.func
         def add_numbers(a: int, b: int) -> int:
             """
             Add two numbers.
@@ -87,7 +87,7 @@ class TestTestCheckpoint:
             >>> add_numbers(2, 3)
             5
             """
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
         unit_meta = {
             "func": add_numbers,
@@ -112,16 +112,16 @@ class TestTestUnit:
     def test_unit_not_compiled(self, test_config, temp_dir, monkeypatch, clear_defless_registry):
         """Test testing uncompiled unit returns error."""
 
-        @defless.func
+        @vibesafe.func
         def uncompiled_func(x: int) -> int:
             """Not compiled."""
-            yield DeflessHandled()
+            yield VibesafeHandled()
 
         monkeypatch.chdir(temp_dir)
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
-        unit_id = uncompiled_func.__defless_unit_id__
+        unit_id = uncompiled_func.__vibesafe_unit_id__
         result = test_unit(unit_id)
         assert not result.passed

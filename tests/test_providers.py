@@ -1,5 +1,5 @@
 """
-Tests for defless.providers module.
+Tests for vibesafe.providers module.
 """
 
 import json
@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from defless.config import ProviderConfig
-from defless.providers import CachedProvider, OpenAICompatibleProvider, get_provider
+from vibesafe.config import ProviderConfig
+from vibesafe.providers import CachedProvider, OpenAICompatibleProvider, get_provider
 
 
 class TestOpenAICompatibleProvider:
@@ -146,7 +146,7 @@ class TestGetProvider:
         monkeypatch.setenv("TEST_API_KEY", "test-key")
 
         # Mock the config to return our test config
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
@@ -158,7 +158,7 @@ class TestGetProvider:
         """Test getting provider with cache."""
         monkeypatch.setenv("TEST_API_KEY", "test-key")
 
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = test_config
 
@@ -168,12 +168,12 @@ class TestGetProvider:
     @pytest.mark.unit
     def test_get_provider_unknown_kind_raises(self, temp_dir, monkeypatch):
         """Test that unknown provider kind raises error."""
-        from defless.config import DeflessConfig, ProviderConfig
+        from vibesafe.config import VibesafeConfig, ProviderConfig
 
-        config = DeflessConfig()
+        config = VibesafeConfig()
         config.provider["bad"] = ProviderConfig(kind="unknown-provider")
 
-        from defless import config as config_module
+        from vibesafe import config as config_module
 
         config_module._config = config
 

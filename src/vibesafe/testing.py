@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from defless.ast_parser import extract_spec
-from defless.config import get_config
+from vibesafe.ast_parser import extract_spec
+from vibesafe.config import get_config
 
 
 class TestResult:
@@ -78,7 +78,7 @@ def _load_impl_func(impl_path: Path, unit_meta: dict[str, Any]) -> Any:
     func_name = unit_meta["qualname"]
 
     spec = importlib.util.spec_from_file_location(
-        f"defless._test.{unit_id.replace('/', '.')}", impl_path
+        f"vibesafe._test.{unit_id.replace('/', '.')}", impl_path
     )
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not load spec from {impl_path}")
@@ -139,10 +139,10 @@ def test_unit(unit_id: str) -> TestResult:
     Returns:
         TestResult
     """
-    from defless.core import defless
+    from vibesafe.core import vibesafe
 
     # Get unit metadata
-    unit_meta = defless.get_unit(unit_id)
+    unit_meta = vibesafe.get_unit(unit_id)
     if not unit_meta:
         return TestResult(passed=False, errors=[f"Unit not found: {unit_id}"])
 
@@ -185,10 +185,10 @@ def run_all_tests() -> dict[str, TestResult]:
     Returns:
         Dictionary mapping unit_id to TestResult
     """
-    from defless.core import defless
+    from vibesafe.core import vibesafe
 
     results = {}
-    for unit_id in defless.get_registry():
+    for unit_id in vibesafe.get_registry():
         results[unit_id] = test_unit(unit_id)
 
     return results
