@@ -403,12 +403,21 @@ def check() -> None:
     overall_success = True
 
     console.print("[bold]Running lint (ruff)...[/bold]")
-    if not _run_command(["ruff", "check", "src", "tests", "examples"]):
-        overall_success = False
+    lint_targets = [Path("src"), Path("tests"), Path("examples")]
+    available_lint_targets = [str(target) for target in lint_targets if target.exists()]
+    if available_lint_targets:
+        if not _run_command(["ruff", "check", *available_lint_targets]):
+            overall_success = False
+    else:
+        console.print("  [yellow]No lint targets found; skipping.[/yellow]")
 
     console.print("[bold]Running type checks (mypy)...[/bold]")
-    if not _run_command(["mypy", "src/vibesafe"]):
-        overall_success = False
+    mypy_target = Path("src") / "vibesafe"
+    if mypy_target.exists():
+        if not _run_command(["mypy", str(mypy_target)]):
+            overall_success = False
+    else:
+        console.print(f"  [yellow]No mypy target found at {mypy_target}; skipping.[/yellow]")
 
     console.print("[bold]Running doctests...[/bold]")
     test_results = run_all_tests()
@@ -748,7 +757,11 @@ def _run_command(cmd: list[str]) -> bool:
     except FileNotFoundError:
         console.print(f"  [red]✗ Command not found:[/red] {' '.join(cmd)}")
     except subprocess.CalledProcessError as exc:
-        output = exc.stderr.strip() if exc.stderr else exc.stdout.strip()
+        output = ""
+        if exc.stderr:
+            output = exc.stderr.strip()
+        elif exc.stdout:
+            output = exc.stdout.strip()
         detail = f" ({output})" if output else ""
         console.print(f"  [red]✗ Command failed ({exc.returncode})[/red]{detail}")
     return False

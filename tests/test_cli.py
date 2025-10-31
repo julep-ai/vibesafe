@@ -120,6 +120,68 @@ class TestCLI:
         assert result.exit_code == 0
         assert "Check complete" in result.output
 
+    def test_check_filters_missing_lint_dirs(
+        self,
+        runner,
+        temp_dir,
+        monkeypatch,
+        clear_defless_registry,
+    ):
+        """Check command only lints directories that exist."""
+
+        monkeypatch.chdir(temp_dir)
+        (temp_dir / "src").mkdir()
+
+        commands: list[list[str]] = []
+
+        monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
+        monkeypatch.setattr("vibesafe.cli.run_all_tests", lambda: {})
+        monkeypatch.setattr("vibesafe.cli._detect_drift", lambda: (0, False))
+
+        def _record_command(cmd: list[str]) -> bool:
+            commands.append(cmd)
+            return True
+
+        monkeypatch.setattr("vibesafe.cli._run_command", _record_command)
+
+        result = runner.invoke(check)
+
+        assert result.exit_code == 0
+        assert commands == [["ruff", "check", "src"]]
+        assert "No mypy target found" in result.output
+        assert "Check complete" in result.output
+
+    def test_check_skips_lint_when_no_targets(
+        self,
+        runner,
+        temp_dir,
+        monkeypatch,
+        clear_defless_registry,
+    ):
+        """Check command skips linting when no directories exist."""
+
+        monkeypatch.chdir(temp_dir)
+
+        commands: list[list[str]] = []
+
+        monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
+        monkeypatch.setattr("vibesafe.cli.run_all_tests", lambda: {})
+        monkeypatch.setattr("vibesafe.cli._detect_drift", lambda: (0, False))
+
+        def _record_command(cmd: list[str]) -> bool:
+            commands.append(cmd)
+            return True
+
+        monkeypatch.setattr("vibesafe.cli._run_command", _record_command)
+
+        result = runner.invoke(check)
+
+        assert result.exit_code == 0
+        assert commands == []
+        assert "No lint targets found" in result.output
+        assert "No mypy target found" in result.output
+        assert "Check complete" in result.output
+
     def test_repl_help(self, runner):
         """Test repl command help."""
         result = runner.invoke(repl, ["--help"])
