@@ -9,7 +9,7 @@
 ## 0) Quick start (for users)
 
 ```bash
-pip install vibesafe  # (name TBD on PyPI)
+pip install vibesafe
 export OPENAI_API_KEY=...      # Provider API key (OpenAI-compatible)
 
 vibe scan

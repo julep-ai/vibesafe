@@ -82,8 +82,24 @@ That's it. The decorator saw your function name, inferred the intent from "cowsa
 
 ### Installation
 
+**Option 1: Install from PyPI (recommended)**
+
 ```bash
-# Clone the repo (for now; PyPI package coming soon)
+# Install via pip or uv
+pip install vibesafe
+# or
+uv pip install vibesafe
+
+# Verify installation
+vibesafe --version
+# or use the short alias:
+vibe --version
+```
+
+**Option 2: Install from source**
+
+```bash
+# Clone the repo
 git clone https://github.com/julep-ai/vibesafe.git
 cd vibesafe
 
@@ -94,8 +110,6 @@ uv pip install -e ".[dev]"
 
 # Verify installation
 vibesafe --version
-# or use the short alias:
-vibe --version
 ```
 
 **Troubleshooting:**
@@ -737,8 +751,8 @@ These examples serve three purposes:
 
 ### Open Items
 
-- [ ] PyPI package release (`pip install vibesafe`)
-- [ ] Documentation site (Docusaurus on GitHub Pages)
+- [x] PyPI package release (`pip install vibesafe`) — Published as v0.1.4b1
+- [ ] Documentation site (Astro Starlight on GitHub Pages) — Workflow exists, needs content
 - [ ] VS Code extension (syntax highlighting for `@vibesafe` specs)
 - [ ] Performance benchmarks (compilation time, test throughput)
 - [ ] Migration guide (v0.1 → v0.2)
