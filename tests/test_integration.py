@@ -12,7 +12,7 @@ class TestEndToEndWorkflow:
     """Integration tests for complete vibesafe workflow."""
 
     def test_complete_function_workflow(
-        self, test_config, temp_dir, monkeypatch, clear_defless_registry, mocker
+        self, test_config, temp_dir, monkeypatch, clear_vibesafe_registry, mocker
     ):
         """Test complete workflow: define -> compile -> test -> load."""
         monkeypatch.chdir(temp_dir)
@@ -81,7 +81,7 @@ def multiply(a: int, b: int) -> int:
 
     @pytest.mark.integration
     def test_http_endpoint_workflow(
-        self, test_config, temp_dir, monkeypatch, clear_defless_registry, mocker
+        self, test_config, temp_dir, monkeypatch, clear_vibesafe_registry, mocker
     ):
         """Test HTTP endpoint workflow."""
         monkeypatch.chdir(temp_dir)
@@ -106,7 +106,7 @@ def multiply(a: int, b: int) -> int:
 
     @pytest.mark.integration
     def test_multiple_functions_workflow(
-        self, test_config, temp_dir, monkeypatch, clear_defless_registry
+        self, test_config, temp_dir, monkeypatch, clear_vibesafe_registry
     ):
         """Test workflow with multiple functions."""
         monkeypatch.chdir(temp_dir)
@@ -166,7 +166,7 @@ api_key_env = "CUSTOM_API_KEY"
         assert config.provider["custom"].model == "custom-model"
 
     @pytest.mark.integration
-    def test_spec_extraction_workflow(self, clear_defless_registry):
+    def test_spec_extraction_workflow(self, clear_vibesafe_registry):
         """Test spec extraction from decorated function."""
 
         @vibesafe
@@ -279,7 +279,7 @@ class TestErrorHandling:
         with pytest.raises(VibesafeCheckpointMissing):
             load_checkpoint("nonexistent/unit")
 
-    def test_uncompiled_function_error(self, clear_defless_registry):
+    def test_uncompiled_function_error(self, clear_vibesafe_registry):
         """Test error when calling uncompiled function."""
 
         @vibesafe

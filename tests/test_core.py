@@ -13,12 +13,12 @@ from vibesafe.testing import TestResult
 class TestVibeCoded:
     """Tests for VibeCoded sentinel."""
 
-    def test_defless_handled_repr(self):
+    def test_vibesafe_handled_repr(self):
         """Test VibeCoded representation."""
         handled = VibeCoded()
         assert repr(handled) == "VibeCoded()"
 
-    def test_defless_handled_is_unique_instance(self):
+    def test_vibesafe_handled_is_unique_instance(self):
         """Test that each VibeCoded is a separate instance."""
         h1 = VibeCoded()
         h2 = VibeCoded()
@@ -48,7 +48,7 @@ class TestVibesafeCore:
         assert vibesafe_module.func is vibesafe_module.vibesafe
         assert vibesafe_module.http is vibesafe_module.vibesafe
 
-    def test_func_decorator_basic(self, clear_defless_registry):
+    def test_func_decorator_basic(self, clear_vibesafe_registry):
         """Test basic function decoration."""
 
         @vibesafe
@@ -60,7 +60,7 @@ class TestVibesafeCore:
         # kind is None by default for now until inference
         assert hasattr(test_func, "__vibesafe_kind__")
 
-    def test_func_decorator_registers_unit(self, clear_defless_registry):
+    def test_func_decorator_registers_unit(self, clear_vibesafe_registry):
         """Test that decoration registers the unit."""
 
         @vibesafe
@@ -74,7 +74,7 @@ class TestVibesafeCore:
         # The registry stores the original function, the decorator returns a wrapper
         assert registry[unit_id]["func"] is another_func.__wrapped__
 
-    def test_func_decorator_with_params(self, clear_defless_registry):
+    def test_func_decorator_with_params(self, clear_vibesafe_registry):
         """Test function decorator with parameters."""
 
         @vibesafe(provider="custom", template="custom.j2")
@@ -86,7 +86,7 @@ class TestVibesafeCore:
         assert param_func.__vibesafe_template__ == "custom.j2"
 
     @pytest.mark.asyncio
-    async def test_http_decorator_basic(self, clear_defless_registry):
+    async def test_http_decorator_basic(self, clear_vibesafe_registry):
         """Test HTTP endpoint decoration (using explicit kind for now)."""
 
         @vibesafe(kind="http")
@@ -97,7 +97,9 @@ class TestVibesafeCore:
         assert hasattr(test_endpoint, "__vibesafe_unit_id__")
         assert test_endpoint.__vibesafe_kind__ == "http"
 
-    def test_func_decorator_raises_on_missing_checkpoint(self, clear_defless_registry, monkeypatch):
+    def test_func_decorator_raises_on_missing_checkpoint(
+        self, clear_vibesafe_registry, monkeypatch
+    ):
         """Test that calling uncompiled function raises error."""
 
         monkeypatch.setattr(
@@ -114,7 +116,7 @@ class TestVibesafeCore:
         with pytest.raises(RuntimeError, match="has not been compiled yet"):
             uncompiled_func(5)
 
-    def test_func_decorator_missing_boundary_marker(self, clear_defless_registry, monkeypatch):
+    def test_func_decorator_missing_boundary_marker(self, clear_vibesafe_registry, monkeypatch):
         """Test that specs without VibeCoded sentinel raise helpfully."""
 
         monkeypatch.setattr(
@@ -131,7 +133,7 @@ class TestVibesafeCore:
         with pytest.raises(RuntimeError, match="VibeCoded"):
             missing_marker("moo")
 
-    def test_pass_treated_as_boundary(self, clear_defless_registry, monkeypatch):
+    def test_pass_treated_as_boundary(self, clear_vibesafe_registry, monkeypatch):
         """`pass` placeholders are treated like VibeCoded."""
 
         monkeypatch.setattr(
@@ -150,7 +152,7 @@ class TestVibesafeCore:
 
         assert "Specs must yield" not in str(exc_info.value)
 
-    def test_ellipsis_treated_as_boundary(self, clear_defless_registry, monkeypatch):
+    def test_ellipsis_treated_as_boundary(self, clear_vibesafe_registry, monkeypatch):
         """`return ...` placeholders are treated like VibeCoded."""
 
         monkeypatch.setattr(
@@ -169,7 +171,7 @@ class TestVibesafeCore:
 
         assert "Specs must yield" not in str(exc_info.value)
 
-    def test_auto_generate_invoked_in_dev_mode(self, clear_defless_registry, monkeypatch):
+    def test_auto_generate_invoked_in_dev_mode(self, clear_vibesafe_registry, monkeypatch):
         """Dev mode triggers auto-generation before raising."""
 
         calls: dict[str, int] = {"count": 0}
@@ -200,7 +202,7 @@ class TestVibesafeCore:
         assert calls["count"] == 1
 
     @pytest.mark.asyncio
-    async def test_http_auto_generate_invoked(self, clear_defless_registry, monkeypatch):
+    async def test_http_auto_generate_invoked(self, clear_vibesafe_registry, monkeypatch):
         """Auto-generation also applies to async endpoints."""
 
         async def fake_http_impl(name: str) -> dict[str, str]:
@@ -226,7 +228,7 @@ class TestVibesafeCore:
         response = await http_spec("moo")
         assert response == {"message": "hi moo"}
 
-    def test_spec_extractor_handles_missing_source(self, clear_defless_registry, monkeypatch):
+    def test_spec_extractor_handles_missing_source(self, clear_vibesafe_registry, monkeypatch):
         """Specs defined in REPL-like contexts fall back to synthesized source."""
 
         def _raise_getsource(func):  # pragma: no cover - exercised via test
@@ -253,7 +255,7 @@ class TestVibesafeCore:
         assert spec["docstring"].startswith("Docstring required")
         assert spec["body_before_handled"] == ""
 
-    def test_auto_generate_allows_missing_doctest(self, clear_defless_registry, monkeypatch):
+    def test_auto_generate_allows_missing_doctest(self, clear_vibesafe_registry, monkeypatch):
         """Interactive auto-generation bypasses doctest requirement."""
 
         from vibesafe.exceptions import VibesafeCheckpointMissing
@@ -309,7 +311,7 @@ class TestVibesafeCore:
         assert result == "generated:moo"
         assert generate_calls == [(False, None), (True, None)]
 
-    def test_auto_generate_on_hash_mismatch(self, clear_defless_registry, monkeypatch):
+    def test_auto_generate_on_hash_mismatch(self, clear_vibesafe_registry, monkeypatch):
         """Hash mismatches should trigger auto-generation in interactive mode."""
 
         from vibesafe.exceptions import VibesafeHashMismatch
@@ -359,7 +361,7 @@ class TestVibesafeCore:
         assert result == "regen:boo"
         assert generate_calls == [(False, None)]
 
-    def test_auto_generate_retries_with_feedback(self, clear_defless_registry, monkeypatch):
+    def test_auto_generate_retries_with_feedback(self, clear_vibesafe_registry, monkeypatch):
         """Quality gate failures feed back into a second generation attempt."""
 
         from vibesafe.exceptions import VibesafeCheckpointMissing
@@ -435,7 +437,7 @@ class TestVibesafeCore:
         assert len(test_runs) == 2
         assert len(load_calls) == 2
 
-    def test_cowsay_fallback_without_api_key(self, clear_defless_registry, monkeypatch):
+    def test_cowsay_fallback_without_api_key(self, clear_vibesafe_registry, monkeypatch):
         """Missing API key falls back to inline cowsay implementation."""
 
         def raise_no_key(*args, **kwargs):
@@ -456,11 +458,11 @@ class TestVibesafeCore:
             return VibeCoded()
 
         with pytest.raises(RuntimeError) as exc_info:
-             cowsayonlyboo("moo")
+            cowsayonlyboo("moo")
 
         assert "API key not found" in str(exc_info.value.__cause__)
 
-    def test_missing_doctest_hint_in_error(self, clear_defless_registry, monkeypatch):
+    def test_missing_doctest_hint_in_error(self, clear_vibesafe_registry, monkeypatch):
         """Runtime error mentions missing doctest when auto generation fails."""
 
         monkeypatch.setattr(
@@ -481,7 +483,7 @@ class TestVibesafeCore:
 
     @pytest.mark.asyncio
     async def test_http_decorator_raises_on_missing_checkpoint(
-        self, clear_defless_registry, monkeypatch
+        self, clear_vibesafe_registry, monkeypatch
     ):
         """Test that calling uncompiled endpoint raises error."""
 
@@ -499,7 +501,7 @@ class TestVibesafeCore:
         with pytest.raises(RuntimeError, match="has not been compiled yet"):
             await uncompiled_endpoint(5)
 
-    def test_get_registry(self, clear_defless_registry):
+    def test_get_registry(self, clear_vibesafe_registry):
         """Test get_registry returns copy of registry."""
 
         @vibesafe
@@ -517,7 +519,7 @@ class TestVibesafeCore:
         registry.clear()
         assert len(get_registry()) == 2
 
-    def test_get_unit(self, clear_defless_registry):
+    def test_get_unit(self, clear_vibesafe_registry):
         """Test get_unit retrieves specific unit metadata."""
 
         @vibesafe
@@ -534,12 +536,12 @@ class TestVibesafeCore:
         # qualname includes full path for nested functions
         assert unit_meta["qualname"].endswith("specific_func")
 
-    def test_get_unit_nonexistent(self, clear_defless_registry):
+    def test_get_unit_nonexistent(self, clear_vibesafe_registry):
         """Test get_unit returns None for nonexistent unit."""
         result = get_unit("nonexistent/unit")
         assert result is None
 
-    def test_func_preserves_function_metadata(self, clear_defless_registry):
+    def test_func_preserves_function_metadata(self, clear_vibesafe_registry):
         """Test that decorator preserves function name and docstring."""
 
         @vibesafe
@@ -551,7 +553,7 @@ class TestVibesafeCore:
         assert my_func.__doc__ == "This is my function."
 
     @pytest.mark.asyncio
-    async def test_http_preserves_function_metadata(self, clear_defless_registry):
+    async def test_http_preserves_function_metadata(self, clear_vibesafe_registry):
         """Test HTTP decorator preserves function metadata."""
 
         @vibesafe(kind="http")
@@ -562,7 +564,7 @@ class TestVibesafeCore:
         assert my_endpoint.__name__ == "my_endpoint"
         assert my_endpoint.__doc__ == "Endpoint docstring."
 
-    def test_multiple_functions_in_same_module(self, clear_defless_registry):
+    def test_multiple_functions_in_same_module(self, clear_vibesafe_registry):
         """Test multiple functions can be decorated in same module."""
 
         @vibesafe

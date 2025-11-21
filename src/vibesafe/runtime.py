@@ -6,7 +6,7 @@ import importlib.util
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import ParamSpec, TypeVar, cast
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -19,13 +19,16 @@ from vibesafe.exceptions import (
     VibesafeHashMismatch,
 )
 
+P = ParamSpec("P")
+R = TypeVar("R")
+
 
 def load_checkpoint(
     unit_id: str,
     verify_hash: bool = True,
     *,
     expected_spec_hash: str | None = None,
-) -> Callable[..., Any]:
+) -> Callable[P, R]:
     """
     Load active implementation for a unit.
 
@@ -127,7 +130,7 @@ def load_checkpoint(
     if not hasattr(module, func_name):
         raise AttributeError(f"Function {func_name} not found in generated module {impl_path}")
 
-    return getattr(module, func_name)
+    return cast(Callable[P, R], getattr(module, func_name))
 
 
 def _verify_checkpoint_hash(checkpoint_dir: Path, impl_path: Path) -> None:
@@ -242,4 +245,3 @@ def update_index(unit_id: str, active_hash: str, *, created: str | None = None) 
             for key, value in data.items():
                 f.write(f'{key} = "{value}"\n')
             f.write("\n")
-

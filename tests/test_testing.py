@@ -56,7 +56,7 @@ class TestTestCheckpoint:
         assert "Implementation file not found" in result.errors[0]
 
     def test_checkpoint_no_doctests_passes(
-        self, checkpoint_dir, sample_impl, clear_defless_registry
+        self, checkpoint_dir, sample_impl, clear_vibesafe_registry
     ):
         """Test checkpoint with no doctests passes."""
 
@@ -75,7 +75,7 @@ class TestTestCheckpoint:
         assert result.total == 0
 
     def test_checkpoint_with_passing_doctests(
-        self, checkpoint_dir, sample_impl, clear_defless_registry
+        self, checkpoint_dir, sample_impl, clear_vibesafe_registry
     ):
         """Test checkpoint with passing doctests."""
 
@@ -99,7 +99,7 @@ class TestTestCheckpoint:
         # Note: May fail if impl doesn't match, depends on sample_impl
         assert isinstance(result, TestResult)
 
-    def test_checkpoint_gates_failure(self, checkpoint_dir, clear_defless_registry, monkeypatch):
+    def test_checkpoint_gates_failure(self, checkpoint_dir, clear_vibesafe_registry, monkeypatch):
         """Gate failures should surface as test failures."""
 
         @vibesafe
@@ -135,15 +135,15 @@ def gated_func(a: int) -> int:
         assert not result.passed
         assert any("ruff failed" in err for err in result.errors)
 
-    def test_checkpoint_writes_defless_file(
+    def test_checkpoint_writes_vibesafe_file(
         self,
         checkpoint_dir,
         temp_dir,
         test_config,
-        clear_defless_registry,
+        clear_vibesafe_registry,
         monkeypatch,
     ):
-        """Doctest harness files are written under tests/defless."""
+        """Doctest harness files are written under tests/vibesafe."""
 
         monkeypatch.chdir(temp_dir)
         from vibesafe import config as config_module
@@ -197,11 +197,12 @@ def doc_func(msg: str) -> str:
         contents = harness_path.read_text()
         assert unit_id in contents
         assert "'hi'" in contents
-        
-        try:
-            import hypothesis
+
+        from importlib.util import find_spec
+
+        if find_spec("hypothesis") is not None:
             assert result.total == 2
-        except ImportError:
+        else:
             # If hypothesis is missing, we expect a failure but the file should still be written
             assert result.total == 1
             assert not result.passed
@@ -213,7 +214,7 @@ def doc_func(msg: str) -> str:
         temp_dir,
         test_config,
         monkeypatch,
-        clear_defless_registry,
+        clear_vibesafe_registry,
     ):
         from vibesafe import config as config_module
 
@@ -254,13 +255,13 @@ def doc_func(msg: str) -> str:
 class TestTestUnit:
     """Tests for test_unit function."""
 
-    def test_unit_not_found(self, clear_defless_registry):
+    def test_unit_not_found(self, clear_vibesafe_registry):
         """Test testing nonexistent unit returns error."""
         result = test_unit("nonexistent/unit")
         assert not result.passed
         assert "Unit not found" in result.errors[0]
 
-    def test_unit_not_compiled(self, test_config, temp_dir, monkeypatch, clear_defless_registry):
+    def test_unit_not_compiled(self, test_config, temp_dir, monkeypatch, clear_vibesafe_registry):
         """Test testing uncompiled unit returns error."""
 
         @vibesafe

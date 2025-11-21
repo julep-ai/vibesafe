@@ -1,10 +1,11 @@
 """Auto-generated doctest harness for test/add_numbers."""
 
 import doctest
+
 from vibesafe.runtime import load_checkpoint
 
-UNIT_ID = 'test/add_numbers'
-FUNC_NAME = 'add_numbers'
+UNIT_ID = "test/add_numbers"
+FUNC_NAME = "add_numbers"
 DOCSTRING = "Add two numbers.\n\n>>> add_numbers(2, 3)\n5"
 PROPERTY_SRC = ""
 

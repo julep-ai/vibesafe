@@ -11,7 +11,7 @@ from vibesafe.exceptions import (
 )
 
 
-@pytest.mark.usefixtures("clear_defless_registry")
+@pytest.mark.usefixtures("clear_vibesafe_registry")
 class TestCodegenErrors:
     """Ensure CodeGenerator raises SPEC-aligned exceptions."""
 

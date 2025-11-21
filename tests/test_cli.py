@@ -29,8 +29,7 @@ class TestCLI:
     def assert_console_output(self, mock_console, text):
         """Assert that the text was printed to the console."""
         output = "\n".join(
-            str(call.args[0]) if call.args else ""
-            for call in mock_console.print.call_args_list
+            str(call.args[0]) if call.args else "" for call in mock_console.print.call_args_list
         )
         assert text in output
 
@@ -46,25 +45,33 @@ class TestCLI:
         assert result.exit_code == 0
         assert "0.1.0" in result.output
 
-    def test_scan_no_units(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_scan_no_units(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Test scan with no units."""
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(scan)
         self.assert_console_output(mock_console, "No vibesafe units found")
 
-    def test_status_no_units(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_status_no_units(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Test status with no units registered."""
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(status)
         self.assert_console_output(mock_console, "No vibesafe units found")
 
-    def test_diff_no_units(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_diff_no_units(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Test diff with no units registered."""
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(diff)
         self.assert_console_output(mock_console, "No vibesafe units found")
 
-    def test_scan_with_units(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_scan_with_units(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Test scan with registered units."""
 
         @vibesafe
@@ -80,11 +87,14 @@ class TestCLI:
                 f.write(f"Output: {result.output}\n")
                 f.write(f"Exception: {result.exception}\n")
                 import traceback
+
                 traceback.print_tb(result.exc_info[2], file=f)
 
         assert result.exit_code == 0
 
-    def test_compile_no_units(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_compile_no_units(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Test compile with no units."""
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(compile)
@@ -131,7 +141,7 @@ class TestCLI:
         self,
         runner,
         monkeypatch,
-        clear_defless_registry,
+        clear_vibesafe_registry,
         mock_console,
     ):
         """Check command succeeds when helpers succeed."""
@@ -150,7 +160,7 @@ class TestCLI:
         runner,
         temp_dir,
         monkeypatch,
-        clear_defless_registry,
+        clear_vibesafe_registry,
         mock_console,
     ):
         """Check command only lints directories that exist."""
@@ -182,7 +192,7 @@ class TestCLI:
         runner,
         temp_dir,
         monkeypatch,
-        clear_defless_registry,
+        clear_vibesafe_registry,
         mock_console,
     ):
         """Check command skips linting when no directories exist."""
@@ -215,7 +225,9 @@ class TestCLI:
         assert result.exit_code == 0
         assert "Interactive" in result.output
 
-    def test_repl_requires_target(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_repl_requires_target(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """REPL without --target should exit with guidance."""
         monkeypatch.chdir(temp_dir)
         monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
@@ -224,7 +236,9 @@ class TestCLI:
         assert result.exit_code == 1
         self.assert_console_output(mock_console, "Specify --target")
 
-    def test_repl_unknown_unit(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_repl_unknown_unit(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Unknown unit should be rejected."""
         monkeypatch.chdir(temp_dir)
         monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
@@ -241,7 +255,7 @@ class TestCLI:
         runner,
         temp_dir,
         monkeypatch,
-        clear_defless_registry,
+        clear_vibesafe_registry,
         mock_console,
     ):
         """REPL processes summary then exits on 'q'."""
@@ -275,11 +289,11 @@ class TestCLI:
                 f.write(f"Output: {result.output}\n")
                 f.write(f"Exception: {result.exception}\n")
                 import traceback
+
                 traceback.print_tb(result.exc_info[2], file=f)
 
         assert result.exit_code == 0
         self.assert_console_output(mock_console, "Bye!")
-
 
     def test_compile_force_flag(self, runner):
         """Test compile with --force flag."""
@@ -291,7 +305,9 @@ class TestCLI:
         result = runner.invoke(compile, ["--target", "test/unit", "--help"])
         assert result.exit_code == 0
 
-    def test_save_freeze_flag(self, runner, temp_dir, monkeypatch, clear_defless_registry, mocker, mock_console):
+    def test_save_freeze_flag(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mocker, mock_console
+    ):
         """save --freeze-http-deps triggers dependency capture."""
 
         monkeypatch.chdir(temp_dir)

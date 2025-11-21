@@ -1,16 +1,12 @@
-"""Auto-generated doctest harness for examples.api.routes/sum_endpoint."""
+"""Auto-generated doctest harness for __main__/hello."""
 
 import doctest
-import warnings
 
-import pytest
-
-from vibesafe.exceptions import VibesafeCheckpointMissing
 from vibesafe.runtime import load_checkpoint
 
-UNIT_ID = "examples.api.routes/sum_endpoint"
-FUNC_NAME = "sum_endpoint"
-DOCSTRING = "Add two numbers and return the result.\n\nReturns a dictionary with the sum.\n\n>>> import anyio\n>>> anyio.run(sum_endpoint, 2, 3)\n{'sum': 5}\n>>> anyio.run(sum_endpoint, 10, 20)\n{'sum': 30}"
+UNIT_ID = "__main__/hello"
+FUNC_NAME = "hello"
+DOCSTRING = ">>> hello(\"World\")\n'Hello, World!'"
 PROPERTY_SRC = ""
 
 
@@ -50,18 +46,7 @@ def _run_doctests(func) -> None:
         raise AssertionError(f"{failures} doctest(s) failed for {UNIT_ID}")
 
 
-def _load_or_skip():
-    try:
-        return load_checkpoint(UNIT_ID)
-    except VibesafeCheckpointMissing as exc:
-        warnings.warn(f"Skipping {UNIT_ID}: {exc}", RuntimeWarning, stacklevel=2)
-        pytest.skip(f"Checkpoint missing for {UNIT_ID}: {exc}")
-    except Exception as exc:  # pragma: no cover - best-effort skip
-        warnings.warn(f"Skipping {UNIT_ID}: {exc}", RuntimeWarning, stacklevel=2)
-        pytest.skip(f"Checkpoint missing for {UNIT_ID}: {exc}")
-
-
 def test_doctests() -> None:
-    func = _load_or_skip()
+    func = load_checkpoint(UNIT_ID)
     _run_doctests(func)
     _exec_properties(func)

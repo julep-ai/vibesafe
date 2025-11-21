@@ -4,11 +4,12 @@ import doctest
 import warnings
 
 import pytest
+
 from vibesafe.exceptions import VibesafeCheckpointMissing
 from vibesafe.runtime import load_checkpoint
 
-UNIT_ID = 'examples.math.ops/is_prime'
-FUNC_NAME = 'is_prime'
+UNIT_ID = "examples.math.ops/is_prime"
+FUNC_NAME = "is_prime"
 DOCSTRING = "Check if a number is prime.\n\n>>> is_prime(2)\nTrue\n>>> is_prime(3)\nTrue\n>>> is_prime(4)\nFalse\n>>> is_prime(17)\nTrue\n>>> is_prime(1)\nFalse"
 PROPERTY_SRC = ""
 

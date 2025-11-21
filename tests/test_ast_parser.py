@@ -12,7 +12,7 @@ def helper_dependency(value: int) -> int:
 class TestSpecExtractor:
     """Tests for SpecExtractor class."""
 
-    def test_extract_signature_basic(self, clear_defless_registry):
+    def test_extract_signature_basic(self, clear_vibesafe_registry):
         """Test extracting basic function signature."""
 
         def test_func(a: int, b: str) -> int:
@@ -26,7 +26,7 @@ class TestSpecExtractor:
         assert "b: str" in signature
         assert "-> int" in signature
 
-    def test_extract_signature_async(self, clear_defless_registry):
+    def test_extract_signature_async(self, clear_vibesafe_registry):
         """Test extracting async function signature."""
 
         async def async_func(x: int) -> str:
@@ -37,7 +37,7 @@ class TestSpecExtractor:
         signature = extractor.extract_signature()
         assert "async def async_func" in signature
 
-    def test_extract_docstring(self, clear_defless_registry):
+    def test_extract_docstring(self, clear_vibesafe_registry):
         """Test extracting docstring."""
 
         def documented_func():
@@ -48,7 +48,7 @@ class TestSpecExtractor:
         docstring = extractor.extract_docstring()
         assert docstring == "This is a docstring with details."
 
-    def test_extract_docstring_multiline(self, clear_defless_registry):
+    def test_extract_docstring_multiline(self, clear_vibesafe_registry):
         """Test extracting multiline docstring."""
 
         def multiline_func():
@@ -64,7 +64,7 @@ class TestSpecExtractor:
         assert "First line." in docstring
         assert "Second line." in docstring
 
-    def test_extract_body_before_handled(self, clear_defless_registry):
+    def test_extract_body_before_handled(self, clear_vibesafe_registry):
         """Test extracting body before VibeCoded."""
 
         @vibesafe
@@ -78,7 +78,7 @@ class TestSpecExtractor:
         body = extractor.extract_body_before_handled()
         assert "x = x + 1" in body or "x+1" in body.replace(" ", "")
 
-    def test_extract_doctests(self, clear_defless_registry):
+    def test_extract_doctests(self, clear_vibesafe_registry):
         """Test extracting doctest examples."""
 
         def doctest_func(x: int) -> int:
@@ -98,7 +98,7 @@ class TestSpecExtractor:
         assert "doctest_func(5)" in examples[0].source
         assert "6" in examples[0].want
 
-    def test_extract_dependencies(self, clear_defless_registry):
+    def test_extract_dependencies(self, clear_vibesafe_registry):
         """Test extracting dependencies."""
 
         @vibesafe
@@ -115,7 +115,7 @@ class TestSpecExtractor:
         assert helper["path"].endswith("tests/test_ast_parser.py")
         assert helper["file_hash"]
 
-    def test_to_dict(self, clear_defless_registry):
+    def test_to_dict(self, clear_vibesafe_registry):
         """Test converting extraction to dictionary."""
 
         @vibesafe
@@ -142,7 +142,7 @@ class TestSpecExtractor:
 class TestExtractSpec:
     """Tests for extract_spec convenience function."""
 
-    def test_extract_spec_basic(self, clear_defless_registry):
+    def test_extract_spec_basic(self, clear_vibesafe_registry):
         """Test extract_spec convenience function."""
 
         def simple_func(x: int) -> int:
@@ -154,7 +154,7 @@ class TestExtractSpec:
         assert "signature" in spec
         assert "docstring" in spec
 
-    def test_extract_spec_with_doctests(self, clear_defless_registry):
+    def test_extract_spec_with_doctests(self, clear_vibesafe_registry):
         """Test extracting spec with doctests."""
 
         def tested_func(x: int) -> int:
@@ -169,7 +169,7 @@ class TestExtractSpec:
         spec = extract_spec(tested_func)
         assert len(spec["doctests"]) == 1
 
-    def test_extract_spec_with_hypothesis_block(self, clear_defless_registry):
+    def test_extract_spec_with_hypothesis_block(self, clear_vibesafe_registry):
         """Hypothesis fenced blocks are captured."""
 
         @vibesafe

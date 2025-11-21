@@ -7,7 +7,7 @@ import os
 import sys
 import warnings
 from collections.abc import Callable
-from typing import Any, ParamSpec, TypeVar, cast
+from typing import Any, ParamSpec, TypeVar, cast, overload
 
 from vibesafe.ast_parser import extract_spec
 from vibesafe.config import get_config, resolve_template_id
@@ -36,7 +36,29 @@ class VibeCoded(BaseException):
 _registry: dict[str, dict[str, Any]] = {}
 
 
+@overload
+def vibesafe[**P, R](
+    fn: Callable[P, R],
+    *,
+    kind: str | None = None,
+    provider: str | None = None,
+    template: str | None = None,
+    **kwargs: Any,
+) -> Callable[P, R]: ...
+
+
+@overload
 def vibesafe(
+    fn: None = None,
+    *,
+    kind: str | None = None,
+    provider: str | None = None,
+    template: str | None = None,
+    **kwargs: Any,
+) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
+
+
+def vibesafe[**P, R](
     fn: Callable[P, R] | None = None,
     *,
     kind: str | None = None,
@@ -85,18 +107,18 @@ def vibesafe(
         is_async = inspect.iscoroutinefunction(func)
 
         if is_async:
+
             @functools.wraps(func)
             async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-                return await _handle_execution(
-                    unit_id, func, args, kwargs, is_async=True
-                )
+                return await _handle_execution(unit_id, func, args, kwargs, is_async=True)
+
             return cast(Callable[P, R], async_wrapper)
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-                return _handle_execution(
-                    unit_id, func, args, kwargs, is_async=False
-                )
+                return _handle_execution(unit_id, func, args, kwargs, is_async=False)
+
             return cast(Callable[P, R], sync_wrapper)
 
     if fn is None:
@@ -137,9 +159,7 @@ def _handle_execution(
 
     def _run_sync_impl(impl: Callable) -> Any:
         if inspect.iscoroutinefunction(impl):
-            raise RuntimeError(
-                f"Unit {unit_id} is sync, but generated implementation is async."
-            )
+            raise RuntimeError(f"Unit {unit_id} is sync, but generated implementation is async.")
         return impl(*args, **kwargs)
 
     # 1. Try to load and run
@@ -163,8 +183,12 @@ def _handle_execution(
 
         # 3. Fallback to original function (which should raise VibeCoded)
         if is_async:
-            return _handle_fallback_async(original_func, args, kwargs, unit_id, spec_meta, generation_error)
-        return _handle_fallback_sync(original_func, args, kwargs, unit_id, spec_meta, generation_error)
+            return _handle_fallback_async(
+                original_func, args, kwargs, unit_id, spec_meta, generation_error
+            )
+        return _handle_fallback_sync(
+            original_func, args, kwargs, unit_id, spec_meta, generation_error
+        )
 
 
 async def _handle_fallback_async(func, args, kwargs, unit_id, spec_meta, error):
@@ -172,7 +196,7 @@ async def _handle_fallback_async(func, args, kwargs, unit_id, spec_meta, error):
         await func(*args, **kwargs)
     except VibeCoded:
         _raise_uncompiled(unit_id, spec_meta, error)
-    
+
     # If we get here, the function didn't raise VibeCoded
     _raise_uncompiled(unit_id, spec_meta, error, "Specs must raise `VibeCoded()`")
 
@@ -194,7 +218,9 @@ def _raise_uncompiled(unit_id, spec_meta, error, extra_hint=None):
     else:
         with contextlib.suppress(Exception):
             if not spec_meta["doctests"]:
-                doctest_hint = f"Spec {unit_id} does not declare any doctests; add at least one example."
+                doctest_hint = (
+                    f"Spec {unit_id} does not declare any doctests; add at least one example."
+                )
 
     error_message = str(error) if error else None
     config_env = get_config().project.env
@@ -290,13 +316,13 @@ def _auto_generate_and_load(unit_id: str, spec_meta: dict[str, Any]) -> Callable
         # Fallback logic for cowsay/boo example if needed, or just raise
         # For now, let's simplify and just raise unless interactive
         if _in_interactive_session():
-             checkpoint_info = generate_for_unit(unit_id, force=False, allow_missing_doctest=True)
+            checkpoint_info = generate_for_unit(unit_id, force=False, allow_missing_doctest=True)
         else:
             raise
     except ValueError as exc:
         if "API key not found" in str(exc):
-             warnings.warn(str(exc), RuntimeWarning, stacklevel=2)
-             raise
+            warnings.warn(str(exc), RuntimeWarning, stacklevel=2)
+            raise
         raise
 
     update_index(

@@ -1,14 +1,11 @@
 """Auto-generated doctest harness for manual_test_phase1/async_hello."""
 
 import doctest
-import warnings
 
-import pytest
-from vibesafe.exceptions import VibesafeCheckpointMissing
 from vibesafe.runtime import load_checkpoint
 
-UNIT_ID = 'manual_test_phase1/async_hello'
-FUNC_NAME = 'async_hello'
+UNIT_ID = "manual_test_phase1/async_hello"
+FUNC_NAME = "async_hello"
 DOCSTRING = ">>> import anyio\n>>> anyio.run(async_hello, \"Async\")\n'Hello, Async!'"
 PROPERTY_SRC = ""
 
@@ -49,18 +46,7 @@ def _run_doctests(func) -> None:
         raise AssertionError(f"{failures} doctest(s) failed for {UNIT_ID}")
 
 
-def _load_or_skip():
-    try:
-        return load_checkpoint(UNIT_ID)
-    except VibesafeCheckpointMissing as exc:
-        warnings.warn(f"Skipping {UNIT_ID}: {exc}", RuntimeWarning, stacklevel=2)
-        pytest.skip(f"Checkpoint missing for {UNIT_ID}: {exc}")
-    except Exception as exc:  # pragma: no cover - best-effort skip
-        warnings.warn(f"Skipping {UNIT_ID}: {exc}", RuntimeWarning, stacklevel=2)
-        pytest.skip(f"Checkpoint missing for {UNIT_ID}: {exc}")
-
-
 def test_doctests() -> None:
-    func = _load_or_skip()
+    func = load_checkpoint(UNIT_ID)
     _run_doctests(func)
     _exec_properties(func)

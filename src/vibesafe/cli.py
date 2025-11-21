@@ -65,8 +65,10 @@ def scan() -> None:
             active_index = tomllib.load(f)
 
     for unit_id, unit_meta in sorted(registry.items()):
-        unit_type = unit_meta.get("kind") or unit_meta.get("type") or (
-            "http" if "method" in unit_meta else "function"
+        unit_type = (
+            unit_meta.get("kind")
+            or unit_meta.get("type")
+            or ("http" if "method" in unit_meta else "function")
         )
 
         spec = extract_spec(unit_meta["func"])
@@ -622,10 +624,7 @@ def repl(target: str | None) -> None:
 
     while True:
         try:
-            if isinstance(console, Console):
-                raw = console.input(prompt)
-            else:
-                raw = input(plain_prompt)
+            raw = console.input(prompt) if isinstance(console, Console) else input(plain_prompt)
         except (KeyboardInterrupt, EOFError):
             console.print("\n[bold]Exiting REPL.[/bold]")
             break

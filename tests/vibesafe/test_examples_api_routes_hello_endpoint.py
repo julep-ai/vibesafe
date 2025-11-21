@@ -4,11 +4,12 @@ import doctest
 import warnings
 
 import pytest
+
 from vibesafe.exceptions import VibesafeCheckpointMissing
 from vibesafe.runtime import load_checkpoint
 
-UNIT_ID = 'examples.api.routes/hello_endpoint'
-FUNC_NAME = 'hello_endpoint'
+UNIT_ID = "examples.api.routes/hello_endpoint"
+FUNC_NAME = "hello_endpoint"
 DOCSTRING = "Greet a user by name.\n\n>>> import anyio\n>>> anyio.run(hello_endpoint, \"Alice\")\n{'message': 'Hello, Alice!'}\n>>> anyio.run(hello_endpoint, \"Bob\")\n{'message': 'Hello, Bob!'}"
 PROPERTY_SRC = ""
 

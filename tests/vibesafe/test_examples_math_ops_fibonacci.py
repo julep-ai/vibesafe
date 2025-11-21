@@ -4,11 +4,12 @@ import doctest
 import warnings
 
 import pytest
+
 from vibesafe.exceptions import VibesafeCheckpointMissing
 from vibesafe.runtime import load_checkpoint
 
-UNIT_ID = 'examples.math.ops/fibonacci'
-FUNC_NAME = 'fibonacci'
+UNIT_ID = "examples.math.ops/fibonacci"
+FUNC_NAME = "fibonacci"
 DOCSTRING = "Return the nth Fibonacci number (0-indexed).\n\n>>> fibonacci(0)\n0\n>>> fibonacci(1)\n1\n>>> fibonacci(5)\n5\n>>> fibonacci(10)\n55"
 PROPERTY_SRC = ""
 

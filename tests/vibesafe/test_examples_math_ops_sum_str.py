@@ -4,12 +4,13 @@ import doctest
 import warnings
 
 import pytest
+
 from vibesafe.exceptions import VibesafeCheckpointMissing
 from vibesafe.runtime import load_checkpoint
 
-UNIT_ID = 'examples.math.ops/sum_str'
-FUNC_NAME = 'sum_str'
-DOCSTRING = "Add two integers represented as strings.\n\n>>> sum_str(\"2\", \"3\")\n'5'\n>>> sum_str(\"10\", \"20\")\n'30'\n>>> sum_str(\"-5\", \"10\")\n'5'"
+UNIT_ID = "examples.math.ops/sum_str"
+FUNC_NAME = "sum_str"
+DOCSTRING = 'Add two integers represented as strings.\n\n>>> sum_str("2", "3")\n\'5\'\n>>> sum_str("10", "20")\n\'30\'\n>>> sum_str("-5", "10")\n\'5\''
 PROPERTY_SRC = ""
 
 

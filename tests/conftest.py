@@ -197,16 +197,16 @@ text = '''Add two numbers.'''
 
 
 @pytest.fixture
-def clear_defless_registry():
+def clear_vibesafe_registry():
     """Clear vibesafe registry between tests."""
     # Ensure default example modules are registered once so the baseline registry matches docs
-    if not getattr(clear_defless_registry, "_seeded", False):
+    if not getattr(clear_vibesafe_registry, "_seeded", False):
         try:
             for module in ("examples.math.ops", "examples.api.routes"):
                 importlib.import_module(module)
         except ImportError:
-            pass # Examples might not be in path during tests
-        clear_defless_registry._seeded = True
+            pass  # Examples might not be in path during tests
+        clear_vibesafe_registry._seeded = True
 
     # Store original registry
     original = vibesafe_core._registry.copy()

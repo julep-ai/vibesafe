@@ -29,7 +29,7 @@ class TestMCPServer:
         assert response["error"]["code"] == -32601
         assert "Method not found" in response["error"]["message"]
 
-    def test_handle_request_scan(self, clear_defless_registry):
+    def test_handle_request_scan(self, clear_vibesafe_registry):
         """Test handling scan request."""
 
         @vibesafe
@@ -75,7 +75,7 @@ class TestMCPServer:
         assert response["error"]["code"] == -32000
         assert "Test error" in response["error"]["message"]
 
-    def test_scan_method(self, clear_defless_registry):
+    def test_scan_method(self, clear_vibesafe_registry):
         """Test scan method."""
 
         @vibesafe
