@@ -6,22 +6,22 @@ from typing import Any
 import pytest
 
 import vibesafe.core as vibesafe_core
-from vibesafe import VibesafeHandled, get_registry, get_unit, vibesafe
+from vibesafe import VibeCoded, get_registry, get_unit, vibesafe
 from vibesafe.testing import TestResult
 
 
-class TestVibesafeHandled:
-    """Tests for VibesafeHandled sentinel."""
+class TestVibeCoded:
+    """Tests for VibeCoded sentinel."""
 
     def test_defless_handled_repr(self):
-        """Test VibesafeHandled representation."""
-        handled = VibesafeHandled()
-        assert repr(handled) == "VibesafeHandled()"
+        """Test VibeCoded representation."""
+        handled = VibeCoded()
+        assert repr(handled) == "VibeCoded()"
 
     def test_defless_handled_is_unique_instance(self):
-        """Test that each VibesafeHandled is a separate instance."""
-        h1 = VibesafeHandled()
-        h2 = VibesafeHandled()
+        """Test that each VibeCoded is a separate instance."""
+        h1 = VibeCoded()
+        h2 = VibeCoded()
         assert type(h1) == type(h2)
         assert h1 is not h2
 
@@ -54,7 +54,7 @@ class TestVibesafeCore:
         @vibesafe
         def test_func(x: int) -> int:
             """Test function."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         assert hasattr(test_func, "__vibesafe_unit_id__")
         # kind is None by default for now until inference
@@ -66,7 +66,7 @@ class TestVibesafeCore:
         @vibesafe
         def another_func(a: str) -> str:
             """Another test."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         registry = get_registry()
         unit_id = another_func.__vibesafe_unit_id__
@@ -80,7 +80,7 @@ class TestVibesafeCore:
         @vibesafe(provider="custom", template="custom.j2")
         def param_func(x: int) -> int:
             """With params."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         assert param_func.__vibesafe_provider__ == "custom"
         assert param_func.__vibesafe_template__ == "custom.j2"
@@ -92,7 +92,7 @@ class TestVibesafeCore:
         @vibesafe(kind="http")
         async def test_endpoint(x: int) -> dict[str, int]:
             """Test endpoint."""
-            return VibesafeHandled()
+            return VibeCoded()
 
         assert hasattr(test_endpoint, "__vibesafe_unit_id__")
         assert test_endpoint.__vibesafe_kind__ == "http"
@@ -109,13 +109,13 @@ class TestVibesafeCore:
         @vibesafe
         def uncompiled_func(x: int) -> int:
             """Not compiled."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         with pytest.raises(RuntimeError, match="has not been compiled yet"):
             uncompiled_func(5)
 
     def test_func_decorator_missing_boundary_marker(self, clear_defless_registry, monkeypatch):
-        """Test that specs without VibesafeHandled sentinel raise helpfully."""
+        """Test that specs without VibeCoded sentinel raise helpfully."""
 
         monkeypatch.setattr(
             vibesafe_core,
@@ -125,14 +125,14 @@ class TestVibesafeCore:
 
         @vibesafe
         def missing_marker(msg: str) -> str:
-            """Spec missing the VibesafeHandled boundary."""
+            """Spec missing the VibeCoded boundary."""
             return msg.upper()
 
-        with pytest.raises(RuntimeError, match="VibesafeHandled"):
+        with pytest.raises(RuntimeError, match="VibeCoded"):
             missing_marker("moo")
 
     def test_pass_treated_as_boundary(self, clear_defless_registry, monkeypatch):
-        """`pass` placeholders are treated like VibesafeHandled."""
+        """`pass` placeholders are treated like VibeCoded."""
 
         monkeypatch.setattr(
             vibesafe_core,
@@ -151,7 +151,7 @@ class TestVibesafeCore:
         assert "Specs must yield" not in str(exc_info.value)
 
     def test_ellipsis_treated_as_boundary(self, clear_defless_registry, monkeypatch):
-        """`return ...` placeholders are treated like VibesafeHandled."""
+        """`return ...` placeholders are treated like VibeCoded."""
 
         monkeypatch.setattr(
             vibesafe_core,
@@ -193,7 +193,7 @@ class TestVibesafeCore:
             'X'
             """
 
-            return VibesafeHandled()
+            return VibeCoded()
 
         result = auto_spec("moo")
         assert result == "generated:moo"
@@ -221,7 +221,7 @@ class TestVibesafeCore:
             {'message': 'HI D'}
             """
 
-            return VibesafeHandled()
+            return VibeCoded()
 
         response = await http_spec("moo")
         assert response == {"message": "hi moo"}
@@ -242,7 +242,7 @@ class TestVibesafeCore:
             1
             """
 
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         from vibesafe.ast_parser import extract_spec
 
@@ -303,7 +303,7 @@ class TestVibesafeCore:
 
         @vibesafe
         def repl_func(msg: str) -> str:
-            return VibesafeHandled()
+            return VibeCoded()
 
         result = repl_func("moo")
         assert result == "generated:moo"
@@ -353,7 +353,7 @@ class TestVibesafeCore:
 
         @vibesafe
         def repl_func(msg: str) -> str:
-            return VibesafeHandled()
+            return VibeCoded()
 
         result = repl_func("boo")
         assert result == "regen:boo"
@@ -425,7 +425,7 @@ class TestVibesafeCore:
             'ok:hi'
             """
 
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         assert flaky("hi") == "ok:hi"
         assert generate_log == [
@@ -453,7 +453,7 @@ class TestVibesafeCore:
         def cowsayonlyboo(msg: str) -> str:
             """A variant of cowsay that only says boo and ignores the input"""
 
-            return VibesafeHandled()
+            return VibeCoded()
 
         with pytest.raises(RuntimeError) as exc_info:
              cowsayonlyboo("moo")
@@ -472,7 +472,7 @@ class TestVibesafeCore:
         @vibesafe
         def missing_doc(msg: str) -> str:
             """No doctest present."""
-            return VibesafeHandled()
+            return VibeCoded()
 
         with pytest.raises(RuntimeError) as exc_info:
             missing_doc("moo")
@@ -494,7 +494,7 @@ class TestVibesafeCore:
         @vibesafe(kind="http")
         async def uncompiled_endpoint(x: int) -> dict[str, int]:
             """Not compiled."""
-            return VibesafeHandled()
+            return VibeCoded()
 
         with pytest.raises(RuntimeError, match="has not been compiled yet"):
             await uncompiled_endpoint(5)
@@ -504,11 +504,11 @@ class TestVibesafeCore:
 
         @vibesafe
         def func1(x: int) -> int:
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         @vibesafe
         def func2(y: str) -> str:
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         registry = get_registry()
         assert len(registry) == 2
@@ -523,7 +523,7 @@ class TestVibesafeCore:
         @vibesafe
         def specific_func(x: int) -> int:
             """Specific."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         unit_id = specific_func.__vibesafe_unit_id__
         unit_meta = get_unit(unit_id)
@@ -545,7 +545,7 @@ class TestVibesafeCore:
         @vibesafe
         def my_func(x: int, y: int) -> int:
             """This is my function."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         assert my_func.__name__ == "my_func"
         assert my_func.__doc__ == "This is my function."
@@ -557,7 +557,7 @@ class TestVibesafeCore:
         @vibesafe(kind="http")
         async def my_endpoint(data: str) -> dict[str, str]:
             """Endpoint docstring."""
-            return VibesafeHandled()
+            return VibeCoded()
 
         assert my_endpoint.__name__ == "my_endpoint"
         assert my_endpoint.__doc__ == "Endpoint docstring."
@@ -567,17 +567,17 @@ class TestVibesafeCore:
 
         @vibesafe
         def func_a(x: int) -> int:
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         @vibesafe
         def func_b(x: str) -> str:
             """Function B."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         @vibesafe
         def func_c(x: float) -> float:
             """Function C."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         registry = get_registry()
         assert len(registry) >= 3

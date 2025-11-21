@@ -176,7 +176,7 @@ class SpecExtractor:
                         body_start = i + 1
                         break
 
-        # Extract body lines before VibesafeHandled
+        # Extract body lines before VibeCoded
         body_lines = []
         sentinel_markers = {
             "pass",
@@ -188,8 +188,14 @@ class SpecExtractor:
         for i in range(body_start, len(source_lines)):
             line = source_lines[i]
             stripped = line.strip()
-            if "VibesafeHandled" in stripped or stripped in sentinel_markers:
+            
+            # Stop at raise VibeCoded() or legacy VibesafeHandled
+            if "VibeCoded" in stripped or "VibesafeHandled" in stripped or "VibeHandled" in stripped:
                 break
+                
+            if stripped in sentinel_markers:
+                break
+                
             # Only include lines with actual content (strip empty/whitespace)
             if stripped:
                 body_lines.append(line)

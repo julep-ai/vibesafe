@@ -6,8 +6,7 @@ with hash-locked verification and test-driven iteration.
 """
 
 from vibesafe.core import (
-    VibeHandled,
-    VibesafeHandled,
+    VibeCoded,
     get_registry,
     get_unit,
     vibesafe,
@@ -37,8 +36,7 @@ __all__ = [
     "get_unit",
     "func",
     "http",
-    "VibesafeHandled",
-    "VibeHandled",
+    "VibeCoded",
     "VibesafeError",
     "VibesafeMissingDoctest",
     "VibesafeTypeError",

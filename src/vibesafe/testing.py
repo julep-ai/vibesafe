@@ -221,7 +221,7 @@ def _ensure_defless_harness(
     if not spec["doctests"] and not spec.get("hypothesis_blocks"):
         return None
 
-    dest_dir = Path.cwd() / "tests" / "defless"
+    dest_dir = Path.cwd() / "tests" / "vibesafe"
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"test_{_sanitize_unit_id(unit_id)}.py"

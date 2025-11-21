@@ -140,8 +140,28 @@ class CodeGenerator:
 
         if not template_file.exists():
             # Try relative to package
-            pkg_dir = Path(__file__).parent.parent.parent
-            template_file = pkg_dir / template_path
+            # vibesafe/codegen.py -> vibesafe/ -> src/ -> root
+            # We want to look inside the package, so we need to find where 'vibesafe' package is installed
+            # If template_path is 'vibesafe/templates/function.j2', we should look for it relative to site-packages or src
+            
+            # Try finding it relative to this file's parent (vibesafe package root)
+            # If template_path starts with 'vibesafe/', strip it to avoid duplication if we are already in vibesafe dir
+            
+            current_file_dir = Path(__file__).parent
+            
+            # Case 1: template_path is like "vibesafe/templates/function.j2"
+            # and we are in ".../site-packages/vibesafe"
+            # We want ".../site-packages/vibesafe/templates/function.j2"
+            
+            if template_path.startswith("vibesafe/"):
+                rel_path = template_path.replace("vibesafe/", "", 1)
+                candidate = current_file_dir / rel_path
+                if candidate.exists():
+                    template_file = candidate
+            
+            if not template_file.exists():
+                 # Fallback: try relative to current working directory again (already done above but just in case)
+                 pass
 
         if not template_file.exists():
             raise FileNotFoundError(f"Template not found: {template_path}")

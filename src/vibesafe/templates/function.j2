@@ -1,0 +1,32 @@
+You are an expert Python developer. Your task is to implement the following function based on its signature, docstring, and doctests.
+
+Context:
+- This function is part of a larger codebase.
+- You must strictly adhere to the type hints.
+- You must pass all provided doctests.
+
+Function Signature:
+{{ signature }}
+
+Docstring:
+\"\"\"
+{{ docstring }}
+\"\"\"
+
+{% if dependencies %}
+Dependencies:
+The following helper functions/variables are available in the scope:
+{% for name, dep in dependencies.items() %}
+# From {{ dep.path }}
+{{ dep.source }}
+{% endfor %}
+{% endif %}
+
+Instructions:
+1. Return ONLY the Python code for the function implementation.
+2. Do NOT wrap the code in markdown blocks (e.g. ```python ... ```).
+3. Do NOT include the docstring in your implementation (it is already defined in the spec).
+4. Do NOT import any external libraries unless absolutely necessary and standard (like `math`, `json`).
+5. Ensure the implementation passes the doctests provided in the docstring.
+
+Implementation:

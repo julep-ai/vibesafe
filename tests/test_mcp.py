@@ -2,7 +2,7 @@
 Tests for vibesafe.mcp module.
 """
 
-from vibesafe import VibesafeHandled, vibesafe
+from vibesafe import VibeCoded, vibesafe
 from vibesafe.mcp import MCPServer
 
 
@@ -35,7 +35,7 @@ class TestMCPServer:
         @vibesafe
         def test_func(x: int) -> int:
             """Test."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         server = MCPServer()
         request = {"jsonrpc": "2.0", "method": "scan", "params": {}, "id": 1}
@@ -80,11 +80,11 @@ class TestMCPServer:
 
         @vibesafe
         def func1(x: int) -> int:
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         @vibesafe
         def func2(y: str) -> str:
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         server = MCPServer()
         result = server.scan({})

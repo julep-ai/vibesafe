@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 import vibesafe.core as vibesafe_core
-from vibesafe import VibesafeHandled, vibesafe
+from vibesafe import VibeCoded, vibesafe
 from vibesafe.config import VibesafeConfig, get_config
 
 # Tell pytest not to collect test_checkpoint and test_unit from vibesafe.testing
@@ -94,7 +94,7 @@ def sample_function() -> Callable[..., Any]:
         >>> add_numbers(10, 20)
         30
         """
-        yield VibesafeHandled()
+        raise VibeCoded()
 
     return add_numbers
 
@@ -112,7 +112,7 @@ def sample_async_function() -> Callable[..., Any]:
         >>> anyio.run(test_endpoint, 5)
         {'result': 5}
         """
-        return VibesafeHandled()
+        return VibeCoded()
 
     return test_endpoint
 

@@ -1,6 +1,6 @@
 """Tests for vibesafe.ast_parser module."""
 
-from vibesafe import VibesafeHandled, vibesafe
+from vibesafe import VibeCoded, vibesafe
 from vibesafe.ast_parser import SpecExtractor, extract_spec
 
 
@@ -65,14 +65,14 @@ class TestSpecExtractor:
         assert "Second line." in docstring
 
     def test_extract_body_before_handled(self, clear_defless_registry):
-        """Test extracting body before VibesafeHandled."""
+        """Test extracting body before VibeCoded."""
 
         @vibesafe
         def body_func(x: int) -> int:
             """Test."""
             x = x + 1
             y = x * 2
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         extractor = SpecExtractor(body_func)
         body = extractor.extract_body_before_handled()
@@ -105,7 +105,7 @@ class TestSpecExtractor:
         def dep_func(x: int) -> int:
             """Test."""
             helper_dependency(x)
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         extractor = SpecExtractor(dep_func)
         deps = extractor.extract_dependencies()
@@ -126,7 +126,7 @@ class TestSpecExtractor:
             >>> complete_func(2, 3)
             5
             """
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         extractor = SpecExtractor(complete_func)
         spec_dict = extractor.to_dict()
@@ -188,7 +188,7 @@ class TestExtractSpec:
             ```
             """
 
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         spec = extract_spec(property_func)
         blocks = spec["hypothesis_blocks"]

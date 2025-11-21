@@ -39,9 +39,9 @@ class PathsConfig(BaseModel):
 class PromptsConfig(BaseModel):
     """Prompt template paths."""
 
-    function: str = "prompts/function.j2"
-    http: str = "prompts/http_endpoint.j2"
-    cli: str = "prompts/cli_command.j2"
+    function: str = "vibesafe/templates/function.j2"
+    http: str = "vibesafe/templates/http_endpoint.j2"
+    cli: str = "vibesafe/templates/cli_command.j2"
 
 
 class ProjectConfig(BaseModel):

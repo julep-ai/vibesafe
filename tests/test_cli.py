@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from click.testing import CliRunner
 
-from vibesafe import VibesafeHandled, get_unit, vibesafe
+from vibesafe import VibeCoded, get_unit, vibesafe
 from vibesafe.cli import check, compile, diff, main, repl, save, scan, status, test
 
 
@@ -70,7 +70,7 @@ class TestCLI:
         @vibesafe
         def test_func(x: int) -> int:
             """Test."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(scan)
@@ -257,7 +257,7 @@ class TestCLI:
             2
             """
 
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         unit_id = demo_spec.__vibesafe_unit_id__
         unit_meta = get_unit(unit_id)
@@ -310,7 +310,7 @@ class TestCLI:
             >>> example(1)
             1
             """
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         unit_id = example.__vibesafe_unit_id__
 

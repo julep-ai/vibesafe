@@ -4,7 +4,7 @@ Integration tests for vibesafe end-to-end workflows.
 
 import pytest
 
-from vibesafe import VibesafeHandled, get_registry, get_unit, vibesafe
+from vibesafe import VibeCoded, get_registry, get_unit, vibesafe
 
 
 @pytest.mark.integration
@@ -31,7 +31,7 @@ class TestEndToEndWorkflow:
             >>> multiply(5, 2)
             10
             """
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         unit_id = multiply.__vibesafe_unit_id__
 
@@ -99,7 +99,7 @@ def multiply(a: int, b: int) -> int:
             >>> anyio.run(double_endpoint, 5)
             {'result': 10}
             """
-            return VibesafeHandled()
+            return VibeCoded()
 
         unit_id = double_endpoint.__vibesafe_unit_id__
         assert get_unit(unit_id)["kind"] == "http"
@@ -118,17 +118,17 @@ def multiply(a: int, b: int) -> int:
         @vibesafe
         def func_a(x: int) -> int:
             """Function A."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         @vibesafe
         def func_b(x: str) -> str:
             """Function B."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         @vibesafe
         def func_c(x: float) -> float:
             """Function C."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         registry = get_registry()
         assert len([u for u in registry if "func_a" in u or "func_b" in u or "func_c" in u]) >= 3
@@ -180,7 +180,7 @@ api_key_env = "CUSTOM_API_KEY"
             'result'
             """
             result = a + b
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         from vibesafe.ast_parser import extract_spec
 
@@ -285,7 +285,7 @@ class TestErrorHandling:
         @vibesafe
         def uncompiled(x: int) -> int:
             """Not compiled."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         with pytest.raises(RuntimeError, match="has not been compiled yet"):
             uncompiled(5)

@@ -2,7 +2,7 @@
 
 import pytest
 
-from vibesafe import VibesafeHandled, get_unit, vibesafe
+from vibesafe import VibeCoded, get_unit, vibesafe
 from vibesafe.codegen import CodeGenerator
 from vibesafe.exceptions import (
     VibesafeMissingDoctest,
@@ -22,7 +22,7 @@ class TestCodegenErrors:
         @vibesafe
         def no_doctest(x: int) -> int:
             """Docstring without doctest examples."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         unit_id = no_doctest.__vibesafe_unit_id__
         unit_meta = get_unit(unit_id)
@@ -46,7 +46,7 @@ class TestCodegenErrors:
             >>> has_doctest(1)
             1
             """
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         unit_id = has_doctest.__vibesafe_unit_id__
         unit_meta = get_unit(unit_id)
@@ -72,7 +72,7 @@ class TestCodegenErrors:
             >>> spec_with_doctest(2)
             2
             """
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         unit_id = spec_with_doctest.__vibesafe_unit_id__
         unit_meta = get_unit(unit_id)

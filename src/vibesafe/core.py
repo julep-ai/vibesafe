@@ -17,22 +17,20 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
-class VibesafeHandled:
+class VibeCoded(BaseException):
     """
-    Sentinel type marking where the spec ends and AI-generated code should begin.
+    Sentinel exception marking where the spec ends and AI-generated code should begin.
 
     Usage:
         @vibesafe
         def my_func(x: int) -> int:
             '''Add 1 to x'''
-            yield VibesafeHandled()
+            raise VibeCoded()
     """
 
     def __repr__(self) -> str:
-        return "VibesafeHandled()"
+        return "VibeCoded()"
 
-
-VibeHandled = VibesafeHandled
 
 # Global registry
 _registry: dict[str, dict[str, Any]] = {}
@@ -163,48 +161,30 @@ def _handle_execution(
             except Exception as auto_exc:
                 generation_error = auto_exc
 
-        # 3. Fallback to original function (which should yield VibesafeHandled)
+        # 3. Fallback to original function (which should raise VibeCoded)
         if is_async:
             return _handle_fallback_async(original_func, args, kwargs, unit_id, spec_meta, generation_error)
         return _handle_fallback_sync(original_func, args, kwargs, unit_id, spec_meta, generation_error)
 
 
 async def _handle_fallback_async(func, args, kwargs, unit_id, spec_meta, error):
-    result = await func(*args, **kwargs)
-    _check_fallback_result(result, unit_id, spec_meta, error)
-    return result
+    try:
+        await func(*args, **kwargs)
+    except VibeCoded:
+        _raise_uncompiled(unit_id, spec_meta, error)
+    
+    # If we get here, the function didn't raise VibeCoded
+    _raise_uncompiled(unit_id, spec_meta, error, "Specs must raise `VibeCoded()`")
 
 
 def _handle_fallback_sync(func, args, kwargs, unit_id, spec_meta, error):
-    result = func(*args, **kwargs)
-    _check_fallback_result(result, unit_id, spec_meta, error)
-    return result
-
-
-def _check_fallback_result(result, unit_id, spec_meta, error):
-    """Verify the fallback result is VibesafeHandled and raise appropriate error."""
-
-    # Check if it's a generator
-    if inspect.isgenerator(result):
-        marker_seen = False
-        try:
-            for item in result:
-                if isinstance(item, VibesafeHandled):
-                    marker_seen = True
-                    break
-        finally:
-            with contextlib.suppress(Exception):
-                result.close()
-
-        if marker_seen:
-            _raise_uncompiled(unit_id, spec_meta, error)
-
-        _raise_uncompiled(unit_id, spec_meta, error, "Specs must yield `VibesafeHandled()`")
-
-    if isinstance(result, VibesafeHandled) or result is Ellipsis or result is None:
+    try:
+        func(*args, **kwargs)
+    except VibeCoded:
         _raise_uncompiled(unit_id, spec_meta, error)
 
-    _raise_uncompiled(unit_id, spec_meta, error, "Specs must return `VibesafeHandled()`")
+    # If we get here, the function didn't raise VibeCoded
+    _raise_uncompiled(unit_id, spec_meta, error, "Specs must raise `VibeCoded()`")
 
 
 def _raise_uncompiled(unit_id, spec_meta, error, extra_hint=None):
