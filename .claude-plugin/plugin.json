@@ -1,0 +1,20 @@
+{
+  "name": "vibesafe",
+  "version": "0.1.0",
+  "description": "Vibesafe developer tools: scan, gen, fix, check. Includes 'piggyback' model access via MCP.",
+  "mcpServers": {
+    "vibesafe": {
+      "type": "stdio",
+      "command": "uv run python -m vibesafe.mcp"
+    }
+  },
+  "commands": [
+    "./commands/vibe.md"
+  ],
+  "skills": [
+    "./skills/vibesafe/SKILL.md"
+  ],
+  "hooks": [
+    "./hooks/hooks.json"
+  ]
+}

@@ -19,7 +19,7 @@ class ProviderConfig(BaseModel):
     """Configuration for an LLM provider."""
 
     kind: str = "openai-compatible"
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-5-mini"
     temperature: float = 0.0
     seed: int = 42
     base_url: str = "https://api.openai.com/v1"
@@ -39,9 +39,9 @@ class PathsConfig(BaseModel):
 class PromptsConfig(BaseModel):
     """Prompt template paths."""
 
-    function: str = "vibesafe/templates/function.j2"
-    http: str = "vibesafe/templates/http_endpoint.j2"
-    cli: str = "vibesafe/templates/cli_command.j2"
+    function: str = "prompts/function.j2"
+    http: str = "prompts/http_endpoint.j2"
+    cli: str = "prompts/cli_command.j2"
 
 
 class ProjectConfig(BaseModel):

@@ -1,10 +1,12 @@
 """Core decorators and sentinel types for vibesafe."""
 
+import asyncio
 import contextlib
 import functools
 import inspect
 import os
 import sys
+import threading
 import warnings
 from collections.abc import Callable
 from typing import Any, ParamSpec, TypeVar, cast, overload
@@ -302,6 +304,36 @@ def _auto_generate_and_load(unit_id: str, spec_meta: dict[str, Any]) -> Callable
     from vibesafe.runtime import load_checkpoint, update_index
     from vibesafe.testing import test_unit
 
+    def _tests_run_in_thread() -> bool:
+        """Return True if an event loop is already running in this thread."""
+
+        with contextlib.suppress(RuntimeError):
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                return True
+        return False
+
+    def _run_tests(unit: str):
+        if not _tests_run_in_thread():
+            return test_unit(unit)
+
+        result_container: list[Any] = []
+        exc_container: list[BaseException] = []
+
+        def _runner() -> None:
+            try:
+                result_container.append(test_unit(unit))
+            except BaseException as exc:  # pragma: no cover - surfaced to caller
+                exc_container.append(exc)
+
+        thread = threading.Thread(target=_runner, daemon=True)
+        thread.start()
+        thread.join()
+
+        if exc_container:
+            raise exc_container[0]
+        return result_container[0]
+
     def _generate(force: bool, feedback: str | None = None) -> dict[str, Any]:
         return generate_for_unit(
             unit_id,
@@ -332,7 +364,7 @@ def _auto_generate_and_load(unit_id: str, spec_meta: dict[str, Any]) -> Callable
     )
     # No more write_shim(unit_id)
 
-    test_result = test_unit(unit_id)
+    test_result = _run_tests(unit_id)
     if test_result:
         return load_checkpoint(unit_id)
 
@@ -347,7 +379,7 @@ def _auto_generate_and_load(unit_id: str, spec_meta: dict[str, Any]) -> Callable
             created=checkpoint_info.get("created_at"),
         )
 
-        retry_result = test_unit(unit_id)
+        retry_result = _run_tests(unit_id)
         if retry_result:
             return load_checkpoint(unit_id)
         errors = retry_result.errors or errors

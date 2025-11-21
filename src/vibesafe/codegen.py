@@ -160,8 +160,10 @@ class CodeGenerator:
                     template_file = candidate
 
             if not template_file.exists():
-                # Fallback: try relative to current working directory again (already done above but just in case)
-                pass
+                # Fallback: allow configured top-level prompts/ paths to resolve to packaged templates
+                candidate = current_file_dir / "templates" / Path(template_path).name
+                if candidate.exists():
+                    template_file = candidate
 
         if not template_file.exists():
             raise FileNotFoundError(f"Template not found: {template_path}")

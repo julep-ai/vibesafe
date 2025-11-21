@@ -1,7 +1,5 @@
 import asyncio
 
-import anyio
-
 from vibesafe import VibeCoded, vibesafe
 
 
@@ -32,10 +30,10 @@ def test_sync():
         print(f"Caught expected error (no API key/checkpoint): {e}")
 
 
-def test_async():
+async def test_async():
     print("Testing async hello...")
     try:
-        print(anyio.run(async_hello, "Async"))
+        print(await async_hello("Async"))
     except Exception as e:
         print(f"Caught expected error (no API key/checkpoint): {e}")
 
