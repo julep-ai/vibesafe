@@ -2,7 +2,7 @@
 Test specs for demonstrating vibesafe functionality.
 """
 
-from vibesafe import VibesafeHandled, vibesafe
+from vibesafe import VibeCoded, vibesafe
 
 
 @vibesafe.func
@@ -19,7 +19,7 @@ def multiply(a: int, b: int) -> int:
     >>> multiply(0, 10)
     0
     """
-    yield VibesafeHandled()
+    raise VibeCoded()
 
 
 @vibesafe.func
@@ -38,7 +38,7 @@ def factorial(n: int) -> int:
     """
     if n < 0:
         raise ValueError("n must be non-negative")
-    yield VibesafeHandled()
+    raise VibeCoded()
 
 
 @vibesafe.func
@@ -55,4 +55,4 @@ def reverse_string(text: str) -> str:
     >>> reverse_string("")
     ''
     """
-    yield VibesafeHandled()
+    raise VibeCoded()

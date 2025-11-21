@@ -6,8 +6,8 @@ env = "dev"  # dev or prod
 
 [provider.default]
 kind = "openai-compatible"
-model = "gpt-4o-mini"
-temperature = 0.0
+model = "gpt-5-mini"
+temperature = 1.0
 seed = 42
 base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
@@ -20,8 +20,9 @@ index = ".vibesafe/index.toml"
 generated = "__generated__"
 
 [prompts]
-function = "prompts/function.j2"
-http = "prompts/http_endpoint.j2"
+function = "vibesafe/templates/function.j2"
+http = "vibesafe/templates/http_endpoint.j2"
+cli = "vibesafe/templates/cli_command.j2"
 
 [sandbox]
 enabled = false

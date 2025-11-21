@@ -12,7 +12,8 @@ def hello(name: str) -> str:
 @vibesafe
 async def async_hello(name: str) -> str:
     """
-    >>> await async_hello("Async")
+    >>> import anyio
+    >>> anyio.run(async_hello, "Async")
     'Hello, Async!'
     """
     raise VibeCoded()
