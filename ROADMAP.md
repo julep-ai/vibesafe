@@ -5,12 +5,13 @@
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Core decorator API | ✅ | Implemented as module-level registry |
-| `@vibesafe.func` | ✅ | Pure function generation |
-| `@vibesafe.http` | ✅ | FastAPI endpoint generation |
+| `@vibesafe` | ✅ | Pure function generation |
+| `@vibesafe(kind="http")` | ✅ | FastAPI endpoint generation |
+| `@vibesafe(kind="cli")` | ✅ | CLI command generation |
 | Import shims | ⚠️ DEPRECATED | Removed in v0.2, replaced with direct imports |
 | Template resolution | ✅ | Added `resolve_template_id()` helper |
 | CLI commands | ✅ | scan, compile, test, save, status, diff |
-| Doctest harness generation | ✅ | Auto-generated under `tests/defless/` |
+| Doctest harness generation | ✅ | Auto-generated under `tests/vibesafe/` |
 | Hashing & dependency tracing | ✅ | Basic implementation with static analysis |
 | FastAPI integration | ✅ | `mount()` helper and health routes |
 | Sandbox execution | ✅ | Configurable subprocess execution |
@@ -44,5 +45,8 @@ The following backlog captures the remaining "Phase 2" items from SPEC Appendix 
 11. **Deprecation warnings** - Add warnings to old docs still referencing `__generated__`
 12. **Example updates** - Update all examples to use current import patterns
 13. **Troubleshooting guide** - Create guide for users upgrading from v0.1
+
+### API Stabilization (v0.2)
+14. **API stabilization** - Core v0.2 API with VibeCoded exception, simplified decorators, and direct imports is now stable
 
 Update this file when new milestones are added or completed.

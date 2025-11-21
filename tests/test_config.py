@@ -74,9 +74,9 @@ class TestPromptsConfig:
     def test_default_prompts(self):
         """Test default prompt paths."""
         config = PromptsConfig()
-        assert config.function == "prompts/function.j2"
-        assert config.http == "prompts/http_endpoint.j2"
-        assert config.cli == "prompts/cli_command.j2"
+        assert config.function == "vibesafe/templates/function.j2"
+        assert config.http == "vibesafe/templates/http_endpoint.j2"
+        assert config.cli == "vibesafe/templates/cli_command.j2"
 
 
 class TestProjectConfig:

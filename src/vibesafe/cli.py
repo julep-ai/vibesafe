@@ -29,12 +29,7 @@ def main() -> None:
 
 
 @main.command()
-@click.option(
-    "--write-shims",
-    is_flag=True,
-    help="Write __generated__ shim files (DEPRECATED)",
-)
-def scan(write_shims: bool) -> None:
+def scan() -> None:
     """
     Scan project for vibesafe-decorated functions.
 
@@ -59,7 +54,7 @@ def scan(write_shims: bool) -> None:
     config = get_config()
     index_path = config.resolve_path(config.paths.index)
 
-    active_units = {}
+    active_index: dict[str, dict[str, str]] = {}
     if index_path.exists():
         if sys.version_info >= (3, 11):
             import tomllib
@@ -67,28 +62,50 @@ def scan(write_shims: bool) -> None:
             import tomli as tomllib
 
         with open(index_path, "rb") as f:
-            index = tomllib.load(f)
-            active_units = {uid: data.get("active", "") for uid, data in index.items()}
+            active_index = tomllib.load(f)
 
     for unit_id, unit_meta in sorted(registry.items()):
-        unit_type = "http" if "method" in unit_meta else "function"
-
-        # Count doctests
-        from vibesafe.ast_parser import extract_spec
+        unit_type = unit_meta.get("kind") or unit_meta.get("type") or (
+            "http" if "method" in unit_meta else "function"
+        )
 
         spec = extract_spec(unit_meta["func"])
         doctest_count = len(spec["doctests"])
 
-        # Check status
-        status = "⚠️  Not compiled" if unit_id not in active_units else "✅ Active"
+        # Compute drift vs active checkpoint if present
+        provider_name = unit_meta.get("provider") or "default"
+        provider_cfg = config.get_provider(provider_name)
+        dependency_digest = compute_dependency_digest(spec["dependencies"])
+        provider_params = {
+            "temperature": provider_cfg.temperature,
+            "seed": provider_cfg.seed,
+            "timeout": provider_cfg.timeout,
+        }
+        template_id = resolve_template_id(unit_meta, config, spec.get("type"))
+        current_hash = compute_spec_hash(
+            signature=spec["signature"],
+            docstring=spec["docstring"],
+            body_before_handled=spec["body_before_handled"],
+            template_id=template_id,
+            provider_model=provider_cfg.model,
+            provider_params=provider_params,
+            dependency_digest=dependency_digest,
+        )
 
-        table.add_row(unit_id, unit_type, str(doctest_count), status)
+        unit_index = active_index.get(unit_id, {})
+        active_hash = unit_index.get("active")
+
+        if not active_hash:
+            status = "⚠️  inactive"
+        elif active_hash == current_hash:
+            status = "✅ in sync"
+        else:
+            status = "⚠️  drift"
+
+        table.add_row(unit_id, str(unit_type), str(doctest_count), status)
 
     console.print(table)
     console.print(f"\n[bold]Total units:[/bold] {len(registry)}")
-
-    if write_shims:
-        console.print("\n[yellow]Shims are deprecated and no longer needed.[/yellow]")
 
 
 @main.command()
@@ -124,6 +141,8 @@ def compile(target: str | None, force: bool) -> None:
 
     console.print(f"[bold]Compiling {len(units_to_compile)} unit(s)...[/bold]\n")
 
+    had_failures = False
+
     for unit_id in units_to_compile:
         console.print(f"[cyan]→ {unit_id}[/cyan]")
 
@@ -131,7 +150,6 @@ def compile(target: str | None, force: bool) -> None:
             checkpoint_info = generate_for_unit(unit_id, force=force)
             console.print(f"  ✓ Generated checkpoint: {checkpoint_info['spec_hash'][:8]}")
 
-            # Update index
             update_index(
                 unit_id,
                 checkpoint_info["spec_hash"],
@@ -139,12 +157,28 @@ def compile(target: str | None, force: bool) -> None:
             )
             console.print("  ✓ Updated index")
 
+            test_result = test_unit(unit_id)
+            if test_result:
+                console.print(f"  ✓ Tests passed ({test_result.total} total)")
+            else:
+                had_failures = True
+                console.print(
+                    f"  [red]✗ Tests failed ({test_result.failures}/{test_result.total})[/red]"
+                )
+                for error in test_result.errors:
+                    console.print(f"    • {error}")
+
         except Exception as e:
+            had_failures = True
             console.print(f"  [red]✗ Error: {e}[/red]")
             if "--verbose" in sys.argv:
                 import traceback
 
                 traceback.print_exc()
+
+    if had_failures:
+        console.print("\n[bold red]Compilation finished with errors.[/bold red]")
+        sys.exit(1)
 
     console.print("\n[bold green]Compilation complete![/bold green]")
 

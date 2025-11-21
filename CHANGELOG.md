@@ -8,14 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **BREAKING**: Renamed `VibesafeHandled` to `VibeCoded` for clearer semantics
+- **BREAKING**: Changed usage pattern from `yield VibesafeHandled()` to `raise VibeCoded()`
+- **BREAKING**: Simplified decorator API: `@vibesafe.func` → `@vibesafe`, `@vibesafe.http` → `@vibesafe(kind="http")`
+- **BREAKING**: Added new CLI command template support: `@vibesafe(kind="cli")`
 - **BREAKING**: Deprecated the `__generated__/` shim system in favor of direct module-level imports
 - **BREAKING**: Removed automatic shim generation from `vibesafe compile` command
-- **BREAKING**: Deprecated `--write-shims` CLI flag (will be removed in a future version)
+- **BREAKING**: Removed `--write-shims` CLI flag
+- Moved template files from `prompts/` to `vibesafe/templates/` for better package organization
 - Updated import patterns from `from app.__generated__.math.ops import sum_str` to `from app.math.ops import sum_str`
-- Enhanced module-level API with new functions:
-  - `vibesafe.get_registry()` - Access the global unit registry
-  - `vibesafe.get_unit(unit_id)` - Retrieve specific units by ID
-  - `vibesafe.resolve_template_id(unit_id)` - Resolve template IDs for units
+
+### Migration Guide
+For users upgrading from v0.1:
+1. Replace all `VibesafeHandled` imports with `VibeCoded`
+2. Change `yield VibesafeHandled()` to `raise VibeCoded()`
+3. Update decorators: `@vibesafe.func` → `@vibesafe`
+4. Update decorators: `@vibesafe.http` → `@vibesafe(kind="http")`
+5. Update imports: remove `__generated__` from import paths
+6. Update `vibesafe.toml`: change template paths from `prompts/` to `vibesafe/templates/`
 
 ### Documentation
 - Updated README.md to reflect new API patterns and deprecation notices
@@ -41,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite with 195 tests
 
 ### Changed
-- Migrated from "defless" to "vibesafe" branding
+- Migrated from "vibesafe" to "vibesafe" branding
 
 ### Technical Details
 - Python 3.12+ requirement

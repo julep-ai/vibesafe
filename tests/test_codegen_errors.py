@@ -56,6 +56,7 @@ class TestCodegenErrors:
         mocker.patch("vibesafe.codegen.get_provider", return_value=mock_provider)
 
         generator = CodeGenerator(unit_id, unit_meta)
+        mocker.patch.object(generator, "_render_prompt", return_value="mock prompt")
 
         with pytest.raises(VibesafeProviderError):
             generator.generate(force=True)
@@ -82,6 +83,7 @@ class TestCodegenErrors:
         mocker.patch("vibesafe.codegen.get_provider", return_value=mock_provider)
 
         generator = CodeGenerator(unit_id, unit_meta)
+        mocker.patch.object(generator, "_render_prompt", return_value="mock prompt")
 
         with pytest.raises(VibesafeValidationError):
             generator.generate(force=True)

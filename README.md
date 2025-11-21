@@ -20,7 +20,7 @@ Vibesafe solves this with **hash-locked checkpoints**: every spec (signature + d
 
 Vibesafe bridges human intent and AI-generated code through a contract system:
 
-1. **Specs are code**: Write a Python function with types and doctests, mark where AI should fill in the implementation with `yield VibesafeHandled()`
+1. **Specs are code**: Write a Python function with types and doctests, mark where AI should fill in the implementation with `raise VibeCoded()`
 2. **Generation is deterministic**: Given the same spec + model settings, Vibesafe produces the same hash and checkpoint
 3. **Verification is automatic**: Generated code must pass doctests, type checking (mypy), and linting (ruff)
 4. **Runtime is hash-verified**: In prod mode, mismatched hashes block execution; in dev mode, they trigger regeneration
@@ -59,8 +59,14 @@ Here's vibesafe in action—no configuration, just code:
 
 ```python
 >>> import vibesafe
->>> @vibesafe.func
-... def cowsay(msg): ...
+>>> from vibesafe import VibeCoded
+>>> @vibesafe.vibesafe
+... def cowsay(msg: str) -> str:
+...     """
+...     >>> cowsay("moo")
+...     'moo'
+...     """
+...     raise VibeCoded()
 ...
 >>> print(cowsay('moo'))
 moo
@@ -127,9 +133,9 @@ export OPENAI_API_KEY="sk-..."
 
 ```python
 # examples/quickstart.py
-from vibesafe import vibesafe, VibesafeHandled
+from vibesafe import vibesafe, VibeCoded
 
-@vibesafe.func
+@vibesafe
 def greet(name: str) -> str:
     """
     Return a greeting message.
@@ -139,7 +145,7 @@ def greet(name: str) -> str:
     >>> greet("世界")
     'Hello, 世界!'
     """
-    yield VibesafeHandled()
+    raise VibeCoded()
 ```
 
 **3. Generate + test:**
@@ -169,7 +175,7 @@ print(greet("World"))  # "Hello, World!"
 1. `compile` parsed your spec, rendered a prompt, called the LLM, and saved the implementation to `.vibesafe/checkpoints/examples.quickstart/greet/<hash>/impl.py`
 2. `test` ran the doctests you wrote, plus mypy and ruff checks
 3. `save` wrote the checkpoint hash to `.vibesafe/index.toml`, activating it for runtime use
-4. The `@vibesafe.func` decorator loads from the active checkpoint transparently
+4. The `@vibesafe` decorator loads from the active checkpoint transparently
 
 ---
 
@@ -189,12 +195,6 @@ vibesafe scan
 #   examples.api.routes/sum_endpoint [2 doctests] ✓ checkpoint active
 ```
 
-**Generate import shims (deprecated):**
-
-```bash
-vibesafe scan --write-shims
-# Note: Shims are deprecated and no longer needed for importing generated code
-```
 
 ### Compiling Implementations
 
@@ -202,7 +202,7 @@ vibesafe scan --write-shims
 
 ```bash
 vibesafe compile
-# Processes every @vibesafe.func and @vibesafe.http in the project
+# Processes every @vibesafe-decorated function in the project
 ```
 
 **Compile specific module:**
@@ -229,7 +229,7 @@ vibesafe compile --target examples.math.ops/sum_str --force
 **What happens during compilation:**
 1. AST parser extracts signature, docstring, pre-hole code
 2. Spec hash computed from signature + doctests + model config
-3. Prompt rendered via Jinja2 template (`prompts/function.j2`)
+3. Prompt rendered via Jinja2 template (`vibesafe/templates/function.j2`)
 4. LLM generates implementation (cached by spec hash)
 5. Generated code validated (correct signature, compiles, no obvious errors)
 6. Checkpoint written to `.vibesafe/checkpoints/<unit>/<hash>/`
@@ -386,8 +386,8 @@ index = ".vibesafe/index.toml"         # Active checkpoint registry
 generated = "__generated__"            # Import shim directory (deprecated)
 
 [prompts]
-function = "prompts/function.j2"       # Template for @vibesafe.func
-http = "prompts/http_endpoint.j2"      # Template for @vibesafe.http
+function = "vibesafe/templates/function.j2"       # Template for @vibesafe
+http = "vibesafe/templates/http_endpoint.j2"      # Template for @vibesafe(kind="http")
 
 [sandbox]
 enabled = false          # Run tests in isolated subprocess (Phase 1)
@@ -397,46 +397,47 @@ memory_mb = 256          # Memory limit (not enforced yet)
 
 ### Decorator API
 
-**@vibesafe.func**
-
-```python
-@vibesafe.func(
-    provider: str = "default",           # Provider name from vibesafe.toml
-    template: str = "prompts/function.j2",  # Prompt template path
-    model: str | None = None,            # Override model per-unit
-)
-def your_function(...) -> ...:
-    """
-    Docstring must include at least one doctest.
-
-    >>> your_function(...)
-    expected_output
-    """
-    # Optional pre-hole code (e.g., validation, parsing)
-    yield VibesafeHandled()  # Or: return VibesafeHandled()
-```
-
-**@vibesafe.http**
-
-```python
-@vibesafe.http(
-    method: str = "GET",                # HTTP method
-    path: str = "/endpoint",            # Route path
-    tags: list[str] = [],               # OpenAPI tags
-    provider: str = "default",
-    template: str = "prompts/http_endpoint.j2",
-    model: str | None = None,
-)
-async def your_endpoint(...) -> ...:
-    """
-    Endpoint description with doctests.
-
-    >>> import anyio
-    >>> anyio.run(your_endpoint, arg1, arg2)
-    expected_output
-    """
-    return VibesafeHandled()
-```
+**@vibesafe**
+ 
+ ```python
+ @vibesafe(
+     provider: str = "default",           # Provider name from vibesafe.toml
+     template: str = "vibesafe/templates/function.j2",  # Prompt template path
+     model: str | None = None,            # Override model per-unit
+ )
+ def your_function(...) -> ...:
+     """
+     Docstring must include at least one doctest.
+ 
+     >>> your_function(...)
+     expected_output
+     """
+     # Optional pre-hole code (e.g., validation, parsing)
+     raise VibeCoded()
+ ```
+ 
+ **@vibesafe(kind="http")**
+ 
+ ```python
+ @vibesafe(
+     kind="http",
+     method: str = "GET",                # HTTP method
+     path: str = "/endpoint",            # Route path
+     tags: list[str] = [],               # OpenAPI tags
+     provider: str = "default",
+     template: str = "vibesafe/templates/http_endpoint.j2",
+     model: str | None = None,
+ )
+ async def your_endpoint(...) -> ...:
+     """
+     Endpoint description with doctests.
+ 
+     >>> import anyio
+     >>> anyio.run(your_endpoint, arg1, arg2)
+     expected_output
+     """
+     raise VibeCoded()
+ ```
 
 ### Error Types
 
@@ -457,10 +458,10 @@ async def your_endpoint(...) -> ...:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ Developer writes spec:                                          │
-│   @vibesafe.func                                                │
+│   @vibesafe                                                     │
 │   def sum_str(a: str, b: str) -> str:                          │
 │       """>>> sum_str("2", "3") → '5'"""                         │
-│       yield VibesafeHandled()                                   │
+│       raise VibeCoded()                                         │
 └─────────────────────────────────────────────────────────────────┘
                            │
                            ▼
@@ -481,7 +482,7 @@ async def your_endpoint(...) -> ...:
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ Prompt Renderer (Jinja2):                                       │
-│   - Loads prompts/function.j2                                   │
+│   - Loads vibesafe/templates/function.j2                         │
 │   - Injects signature, doctests, type hints                     │
 │   - Produces final prompt string                                │
 └─────────────────────────────────────────────────────────────────┘
@@ -655,7 +656,7 @@ Now your containerized deployment uses the exact versions that passed tests, pre
 Every time you change a spec, the hash changes. This creates a natural test suite for prompt engineering:
 
 ```bash
-# After editing prompts/function.j2
+# After editing vibesafe/templates/function.j2
 vibesafe compile --force  # Regenerate all units
 vibesafe test             # Verify all doctests still pass
 vibesafe diff             # Review generated code changes
@@ -706,8 +707,8 @@ These examples serve three purposes:
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Python 3.12+ support | ✅ | Tested on 3.12, 3.13 |
-| `@vibesafe.func` decorator | ✅ | Pure function generation |
-| `@vibesafe.http` decorator | ✅ | FastAPI endpoint generation |
+| `@vibesafe` decorator | ✅ | Function and endpoint generation |
+| `kind` parameter | ✅ | Supports "function", "http", "cli" |
 | Doctest verification | ✅ | Auto-extracted from docstrings |
 | Type checking (mypy) | ✅ | Mandatory gate before save |
 | Linting (ruff) | ✅ | Enforces style consistency |

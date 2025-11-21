@@ -21,9 +21,9 @@ vibe save
 `app/math/ops.py`
 
 ```python
-from vibesafe import vibesafe, VibeHandled
+from vibesafe import vibesafe, VibeCoded
 
-@vibesafe.func
+@vibesafe
 def sum_str(a: str, b: str) -> str:
     """
     Add two ints represented as strings.
@@ -32,7 +32,7 @@ def sum_str(a: str, b: str) -> str:
     '5'
     """
     a, b = int(a), int(b)
-    yield VibeHandled()  # the “hole” Vibesafe fills
+    raise VibeCoded()  # the "hole" Vibesafe fills
 ```
 
 Import generated implementation (post-compile/save):
@@ -72,14 +72,14 @@ your_pkg/
   cache/                          # provider cache (gitignored)
 vibesafe.toml                     # project config
 tests/
-  defless/                        # doctest + property tests emitted here
+  vibesafe/                        # doctest + property tests emitted here
 ```
 
 > **Unit ID** = `<module.path>/<object_name>`, e.g. `app.math.ops/sum_str`.
 
 ## 3) Components
 
-* **Decorators** (`@vibesafe.func`, `@vibesafe.http`) mark specs and provide per-unit config.
+* **Decorators** (`@vibesafe` with optional `kind` parameter) mark specs and provide per-unit config.
 * **Codegen** renders a **Jinja** prompt, calls provider, validates code, writes checkpoint.
 * **Hasher** computes `H_spec` and `H_chk` (see §10).
 * **CLI** (`vibe`) runs `scan`, `compile`, `test`, `save`, etc.
@@ -160,8 +160,9 @@ checkpoints = ".vibesafe/checkpoints"
 cache = ".vibesafe/cache"
 
 [prompts]
-function = "prompts/function.j2"
-http = "prompts/http_endpoint.j2"
+function = "vibesafe/templates/function.j2"
+http = "vibesafe/templates/http_endpoint.j2"
+cli = "vibesafe/templates/cli_command.j2"
 ```
 
 Per-unit overrides (decorator kwargs) take precedence over file config.
@@ -316,7 +317,7 @@ created = "2025-10-29T09:43:12Z"
 ```toml
 spec_sha = "5a72..."
 chk_sha  = "2d46..."
-defless_compat = "0.1"                # internal schema version if needed
+vibesafe_compat = "0.1"                # internal schema version if needed
 vibesafe_version = "0.1.0"
 provider = "openai-compatible:gpt-4o-mini"
 prompt_template = "function.j2"
@@ -341,7 +342,7 @@ pydantic = "2.9.1"
 
 ## 9) Prompting & templates
 
-* **Jinja** templates live at `prompts/function.j2`, `prompts/http_endpoint.j2`.
+* **Jinja** templates live at `vibesafe/templates/function.j2`, `vibesafe/templates/http_endpoint.j2`, `vibesafe/templates/cli_command.j2`.
 * Context available to templates:
 
   ```python
@@ -416,7 +417,7 @@ H_chk = sha256( H_spec || prompt_render_sha || generated_code_sha )
     * `meta.toml`
  7. **Run tests**:
 
-   * build pytest doctest wrappers in `tests/defless/`
+   * build pytest doctest wrappers in `tests/vibesafe/`
    * run pyright/mypy + ruff
 9. **Activate**:
 
@@ -426,7 +427,7 @@ H_chk = sha256( H_spec || prompt_render_sha || generated_code_sha )
 
 ### 12.1 Doctests → pytest conversion
 
-* Generate a file per unit: `tests/defless/test_app_math_ops_sum_str.py`.
+* Generate a file per unit: `tests/vibesafe/test_app_math_ops_sum_str.py`.
 * Harness can run these in isolation (`vibe test`) or with the full suite (`--all`).
 
 ### 12.2 Property-based (Phase 2)
@@ -585,7 +586,7 @@ class Provider(Protocol):
 
 ## 21) Template overrides
 
-* Put custom Jinja under `prompts/`.
+* Put custom Jinja under `vibesafe/templates/` (or point `prompts.*` to your own path).
 * Set paths in `vibesafe.toml` or pass `prompt=` to a decorator for one-off overrides.
 
 ## 22) Sandbox (optional, Phase 2)

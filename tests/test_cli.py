@@ -280,12 +280,6 @@ class TestCLI:
         assert result.exit_code == 0
         self.assert_console_output(mock_console, "Bye!")
 
-    def test_scan_write_shims_flag(self, runner, temp_dir, monkeypatch, mock_console):
-        """Test scan with --write-shims flag."""
-        monkeypatch.chdir(temp_dir)
-        result = runner.invoke(scan, ["--write-shims"])
-        assert result.exit_code == 0
-        self.assert_console_output(mock_console, "Shims are deprecated")
 
     def test_compile_force_flag(self, runner):
         """Test compile with --force flag."""

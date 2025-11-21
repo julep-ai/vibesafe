@@ -14,6 +14,43 @@ Thanks for helping improve Vibesafe! These quick notes cover the essentials for 
 - Lint and format with `ruff check src tests examples` and `ruff format src tests examples`.
 - Type-check with `mypy src/vibesafe` and `pyright src/vibesafe`.
 
+## API Patterns (v0.2+)
+
+### Basic Function Spec
+```python
+from vibesafe import vibesafe, VibeCoded
+
+@vibesafe
+def greet(name: str) -> str:
+    """
+    >>> greet("World")
+    'Hello, World!'
+    """
+    raise VibeCoded()
+```
+
+### HTTP Endpoint Spec
+```python
+@vibesafe(kind="http")
+def get_user(user_id: str) -> dict:
+    """
+    >>> get_user("123")
+    {'id': '123', 'name': 'Alice'}
+    """
+    raise VibeCoded()
+```
+
+### CLI Command Spec
+```python
+@vibesafe(kind="cli")
+def process_file(input_path: str, output_path: str) -> None:
+    """
+    >>> process_file("input.txt", "output.txt")
+    # Process file from input to output
+    """
+    raise VibeCoded()
+```
+
 ## Deprecated Features
 - `--write-shims` flag on `vibesafe scan` is deprecated as of v0.2. Direct imports are now preferred over generated shim files.
 
