@@ -67,7 +67,7 @@ class TestSpecExtractor:
     def test_extract_body_before_handled(self, clear_defless_registry):
         """Test extracting body before VibesafeHandled."""
 
-        @vibesafe.func
+        @vibesafe
         def body_func(x: int) -> int:
             """Test."""
             x = x + 1
@@ -101,7 +101,7 @@ class TestSpecExtractor:
     def test_extract_dependencies(self, clear_defless_registry):
         """Test extracting dependencies."""
 
-        @vibesafe.func
+        @vibesafe
         def dep_func(x: int) -> int:
             """Test."""
             helper_dependency(x)
@@ -118,7 +118,7 @@ class TestSpecExtractor:
     def test_to_dict(self, clear_defless_registry):
         """Test converting extraction to dictionary."""
 
-        @vibesafe.func
+        @vibesafe
         def complete_func(a: int, b: int) -> int:
             """
             Add two numbers.
@@ -172,7 +172,7 @@ class TestExtractSpec:
     def test_extract_spec_with_hypothesis_block(self, clear_defless_registry):
         """Hypothesis fenced blocks are captured."""
 
-        @vibesafe.func
+        @vibesafe
         def property_func(x: int) -> int:
             """Example with property.
 

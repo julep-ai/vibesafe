@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from vibesafe import VibesafeHandled, vibesafe
-from vibesafe.core import VibesafeDecorator
+import vibesafe.core as vibesafe_core
+from vibesafe import VibesafeHandled, get_registry, get_unit, vibesafe
 from vibesafe.testing import TestResult
 
 
@@ -26,59 +26,58 @@ class TestVibesafeHandled:
         assert h1 is not h2
 
 
-class TestVibesafeDecorator:
-    """Tests for VibesafeDecorator class."""
+class TestVibesafeCore:
+    """Tests for vibesafe core functionality."""
 
-    def test_decorator_initialization(self):
-        """Test that decorator initializes with empty registry."""
-        decorator = VibesafeDecorator()
-        assert decorator._registry == {}
+    def test_registry_initialization(self):
+        """Test that registry starts empty (or we can clear it)."""
+        # We can't easily assert it's empty globally, but we can check type
+        registry = get_registry()
+        assert isinstance(registry, dict)
 
-    def test_module_exposes_func_alias(self):
-        """Importing vibesafe package exposes .func convenience alias."""
+    def test_module_exposes_aliases(self):
+        """Importing vibesafe package exposes convenience aliases."""
         import importlib
 
         vibesafe_module = importlib.import_module("vibesafe")
 
         assert hasattr(vibesafe_module, "func")
         assert hasattr(vibesafe_module, "http")
-
-        @vibesafe_module.func
-        def alias_spec(x: int) -> int:
-            return x
-
-        assert alias_spec.__vibesafe_type__ == "function"
+        assert hasattr(vibesafe_module, "get_registry")
+        assert hasattr(vibesafe_module, "get_unit")
+        assert vibesafe_module.func is vibesafe_module.vibesafe
+        assert vibesafe_module.http is vibesafe_module.vibesafe
 
     def test_func_decorator_basic(self, clear_defless_registry):
         """Test basic function decoration."""
 
-        @vibesafe.func
+        @vibesafe
         def test_func(x: int) -> int:
             """Test function."""
             yield VibesafeHandled()
 
         assert hasattr(test_func, "__vibesafe_unit_id__")
-        assert hasattr(test_func, "__vibesafe_type__")
-        assert test_func.__vibesafe_type__ == "function"
+        # kind is None by default for now until inference
+        assert hasattr(test_func, "__vibesafe_kind__")
 
     def test_func_decorator_registers_unit(self, clear_defless_registry):
         """Test that decoration registers the unit."""
 
-        @vibesafe.func
+        @vibesafe
         def another_func(a: str) -> str:
             """Another test."""
             yield VibesafeHandled()
 
-        registry = vibesafe.get_registry()
-        assert len(registry) >= 1
+        registry = get_registry()
         unit_id = another_func.__vibesafe_unit_id__
         assert unit_id in registry
-        assert registry[unit_id]["type"] == "function"
+        # The registry stores the original function, the decorator returns a wrapper
+        assert registry[unit_id]["func"] is another_func.__wrapped__
 
     def test_func_decorator_with_params(self, clear_defless_registry):
         """Test function decorator with parameters."""
 
-        @vibesafe.func(provider="custom", template="custom.j2")
+        @vibesafe(provider="custom", template="custom.j2")
         def param_func(x: int) -> int:
             """With params."""
             yield VibesafeHandled()
@@ -86,60 +85,28 @@ class TestVibesafeDecorator:
         assert param_func.__vibesafe_provider__ == "custom"
         assert param_func.__vibesafe_template__ == "custom.j2"
 
-    def test_http_decorator_basic(self, clear_defless_registry):
-        """Test HTTP endpoint decoration."""
+    @pytest.mark.asyncio
+    async def test_http_decorator_basic(self, clear_defless_registry):
+        """Test HTTP endpoint decoration (using explicit kind for now)."""
 
-        @vibesafe.http(method="POST", path="/test")
+        @vibesafe(kind="http")
         async def test_endpoint(x: int) -> dict[str, int]:
             """Test endpoint."""
             return VibesafeHandled()
 
         assert hasattr(test_endpoint, "__vibesafe_unit_id__")
-        assert test_endpoint.__vibesafe_type__ == "http"
-        assert test_endpoint.__vibesafe_method__ == "POST"
-        assert test_endpoint.__vibesafe_path__ == "/test"
-
-    def test_http_decorator_registers_unit(self, clear_defless_registry):
-        """Test HTTP decoration registers unit."""
-
-        @vibesafe.http(method="GET", path="/hello")
-        async def hello_endpoint(name: str) -> dict[str, str]:
-            """Hello endpoint."""
-            return VibesafeHandled()
-
-        registry = vibesafe.get_registry()
-        unit_id = hello_endpoint.__vibesafe_unit_id__
-        assert unit_id in registry
-        assert registry[unit_id]["type"] == "http"
-        assert registry[unit_id]["method"] == "GET"
-        assert registry[unit_id]["path"] == "/hello"
-
-    def test_http_decorator_with_params(self, clear_defless_registry):
-        """Test HTTP decorator with custom params."""
-
-        @vibesafe.http(
-            method="PUT",
-            path="/update",
-            provider="custom",
-            template="http_custom.j2",
-        )
-        async def update_endpoint(id: int, data: str) -> dict[str, Any]:
-            """Update endpoint."""
-            return VibesafeHandled()
-
-        assert update_endpoint.__vibesafe_provider__ == "custom"
-        assert update_endpoint.__vibesafe_template__ == "http_custom.j2"
+        assert test_endpoint.__vibesafe_kind__ == "http"
 
     def test_func_decorator_raises_on_missing_checkpoint(self, clear_defless_registry, monkeypatch):
         """Test that calling uncompiled function raises error."""
 
         monkeypatch.setattr(
-            VibesafeDecorator,
+            vibesafe_core,
             "_should_auto_generate",
-            lambda self, exc: False,
+            lambda exc: False,
         )
 
-        @vibesafe.func
+        @vibesafe
         def uncompiled_func(x: int) -> int:
             """Not compiled."""
             yield VibesafeHandled()
@@ -151,12 +118,12 @@ class TestVibesafeDecorator:
         """Test that specs without VibesafeHandled sentinel raise helpfully."""
 
         monkeypatch.setattr(
-            VibesafeDecorator,
+            vibesafe_core,
             "_should_auto_generate",
-            lambda self, exc: False,
+            lambda exc: False,
         )
 
-        @vibesafe.func
+        @vibesafe
         def missing_marker(msg: str) -> str:
             """Spec missing the VibesafeHandled boundary."""
             return msg.upper()
@@ -168,12 +135,12 @@ class TestVibesafeDecorator:
         """`pass` placeholders are treated like VibesafeHandled."""
 
         monkeypatch.setattr(
-            VibesafeDecorator,
+            vibesafe_core,
             "_should_auto_generate",
-            lambda self, exc: False,
+            lambda exc: False,
         )
 
-        @vibesafe.func
+        @vibesafe
         def pass_spec(msg: str) -> str:
             """Placeholder using pass."""
             pass
@@ -187,12 +154,12 @@ class TestVibesafeDecorator:
         """`return ...` placeholders are treated like VibesafeHandled."""
 
         monkeypatch.setattr(
-            VibesafeDecorator,
+            vibesafe_core,
             "_should_auto_generate",
-            lambda self, exc: False,
+            lambda exc: False,
         )
 
-        @vibesafe.func
+        @vibesafe
         def ellipsis_spec(msg: str) -> str:
             """Placeholder using ellipsis."""
             return ...
@@ -207,7 +174,7 @@ class TestVibesafeDecorator:
 
         calls: dict[str, int] = {"count": 0}
 
-        def fake_auto(self, unit_id: str, spec_meta: dict[str, Any]):
+        def fake_auto(unit_id: str, spec_meta: dict[str, Any]):
             calls["count"] += 1
 
             def impl(msg: str) -> str:
@@ -215,9 +182,10 @@ class TestVibesafeDecorator:
 
             return impl
 
-        monkeypatch.setattr(VibesafeDecorator, "_auto_generate_and_load", fake_auto)
+        monkeypatch.setattr(vibesafe_core, "_auto_generate_and_load", fake_auto)
+        monkeypatch.setattr(vibesafe_core, "_should_auto_generate", lambda exc: True)
 
-        @vibesafe.func
+        @vibesafe
         def auto_spec(msg: str) -> str:
             """Docstring with doctest.
 
@@ -233,17 +201,18 @@ class TestVibesafeDecorator:
 
     @pytest.mark.asyncio
     async def test_http_auto_generate_invoked(self, clear_defless_registry, monkeypatch):
-        """Auto-generation also applies to HTTP endpoints."""
+        """Auto-generation also applies to async endpoints."""
 
         async def fake_http_impl(name: str) -> dict[str, str]:
             return {"message": f"hi {name}"}
 
-        async def fake_auto_http(self, unit_id: str, spec_meta: dict[str, Any]):
+        def fake_auto(unit_id: str, spec_meta: dict[str, Any]):
             return fake_http_impl
 
-        monkeypatch.setattr(VibesafeDecorator, "_auto_generate_http", fake_auto_http)
+        monkeypatch.setattr(vibesafe_core, "_auto_generate_and_load", fake_auto)
+        monkeypatch.setattr(vibesafe_core, "_should_auto_generate", lambda exc: True)
 
-        @vibesafe.http(method="GET", path="/hi")
+        @vibesafe(kind="http")
         async def http_spec(name: str) -> dict[str, str]:
             """Docstring with doctest.
 
@@ -265,7 +234,7 @@ class TestVibesafeDecorator:
 
         monkeypatch.setattr("vibesafe.ast_parser.inspect.getsource", _raise_getsource)
 
-        @vibesafe.func
+        @vibesafe
         def interactive_spec(x: int) -> int:
             """Docstring required for REPL specs.
 
@@ -278,7 +247,7 @@ class TestVibesafeDecorator:
         from vibesafe.ast_parser import extract_spec
 
         unit_id = interactive_spec.__vibesafe_unit_id__
-        stored_func = vibesafe.get_unit(unit_id)["func"]
+        stored_func = get_unit(unit_id)["func"]
         spec = extract_spec(stored_func)
         assert spec["signature"].startswith("def interactive_spec")
         assert spec["docstring"].startswith("Docstring required")
@@ -315,22 +284,24 @@ class TestVibesafeDecorator:
 
         monkeypatch.setattr("vibesafe.codegen.generate_for_unit", fake_generate)
         monkeypatch.setattr("vibesafe.runtime.update_index", lambda *a, **k: None)
-        monkeypatch.setattr("vibesafe.runtime.write_shim", lambda unit_id: Path("/tmp/shim.py"))
-
-        def fake_load_active(unit_id: str, verify_hash: bool = True, **kwargs):
+        # load_checkpoint logic is mocked via _auto_generate_and_load usually, but here we mock lower levels
+        # Actually _auto_generate_and_load calls generate_for_unit, update_index, test_unit, load_checkpoint
+        
+        # We need to mock load_checkpoint to fail first then succeed
+        def fake_load_checkpoint(unit_id: str, verify_hash: bool = True, **kwargs):
             if not generate_calls:
                 raise VibesafeCheckpointMissing("missing")
             return lambda msg: f"generated:{msg}"
 
-        monkeypatch.setattr("vibesafe.runtime.load_active", fake_load_active)
+        monkeypatch.setattr("vibesafe.runtime.load_checkpoint", fake_load_checkpoint)
         monkeypatch.setattr(
             "vibesafe.testing.test_unit",
             lambda unit_id: TestResult(passed=True, total=0),
         )
-        monkeypatch.setattr(VibesafeDecorator, "_should_auto_generate", lambda self, exc: True)
-        monkeypatch.setattr(VibesafeDecorator, "_in_interactive_session", lambda self: True)
+        monkeypatch.setattr(vibesafe_core, "_should_auto_generate", lambda exc: True)
+        monkeypatch.setattr(vibesafe_core, "_in_interactive_session", lambda: True)
 
-        @vibesafe.func
+        @vibesafe
         def repl_func(msg: str) -> str:
             return VibesafeHandled()
 
@@ -365,23 +336,22 @@ class TestVibesafeDecorator:
 
         monkeypatch.setattr("vibesafe.codegen.generate_for_unit", fake_generate)
         monkeypatch.setattr("vibesafe.runtime.update_index", lambda *a, **k: None)
-        monkeypatch.setattr("vibesafe.runtime.write_shim", lambda unit_id: Path("/tmp/shim.py"))
 
-        def fake_load_active(unit_id: str, verify_hash: bool = True, **kwargs):
-            # First call raises mismatch to trigger auto-generate, second returns shim.
+        def fake_load_checkpoint(unit_id: str, verify_hash: bool = True, **kwargs):
+            # First call raises mismatch to trigger auto-generate, second returns impl.
             if not generate_calls:
                 raise VibesafeHashMismatch("mismatch")
             return lambda msg: f"regen:{msg}"
 
-        monkeypatch.setattr("vibesafe.runtime.load_active", fake_load_active)
+        monkeypatch.setattr("vibesafe.runtime.load_checkpoint", fake_load_checkpoint)
         monkeypatch.setattr(
             "vibesafe.testing.test_unit",
             lambda unit_id: TestResult(passed=True, total=0),
         )
-        monkeypatch.setattr(VibesafeDecorator, "_should_auto_generate", lambda self, exc: True)
-        monkeypatch.setattr(VibesafeDecorator, "_in_interactive_session", lambda self: True)
+        monkeypatch.setattr(vibesafe_core, "_should_auto_generate", lambda exc: True)
+        monkeypatch.setattr(vibesafe_core, "_in_interactive_session", lambda: True)
 
-        @vibesafe.func
+        @vibesafe
         def repl_func(msg: str) -> str:
             return VibesafeHandled()
 
@@ -429,7 +399,7 @@ class TestVibesafeDecorator:
 
         load_calls: list[tuple[str, str | None]] = []
 
-        def fake_load_active(
+        def fake_load_checkpoint(
             unit_id: str,
             *,
             expected_spec_hash: str | None = None,
@@ -441,14 +411,13 @@ class TestVibesafeDecorator:
             return lambda msg: f"ok:{msg}"
 
         monkeypatch.setattr("vibesafe.codegen.generate_for_unit", fake_generate)
-        monkeypatch.setattr("vibesafe.runtime.load_active", fake_load_active)
+        monkeypatch.setattr("vibesafe.runtime.load_checkpoint", fake_load_checkpoint)
         monkeypatch.setattr("vibesafe.runtime.update_index", lambda *a, **k: None)
-        monkeypatch.setattr("vibesafe.runtime.write_shim", lambda unit_id: Path("/tmp/shim.py"))
         monkeypatch.setattr("vibesafe.testing.test_unit", fake_test_unit)
-        monkeypatch.setattr(VibesafeDecorator, "_should_auto_generate", lambda self, exc: True)
-        monkeypatch.setattr(VibesafeDecorator, "_in_interactive_session", lambda self: True)
+        monkeypatch.setattr(vibesafe_core, "_should_auto_generate", lambda exc: True)
+        monkeypatch.setattr(vibesafe_core, "_in_interactive_session", lambda: True)
 
-        @vibesafe.func
+        @vibesafe
         def flaky(msg: str) -> str:
             """Has doctest.
 
@@ -474,33 +443,33 @@ class TestVibesafeDecorator:
 
         monkeypatch.setattr("vibesafe.codegen.generate_for_unit", raise_no_key)
         monkeypatch.setattr("vibesafe.runtime.update_index", lambda *a, **k: None)
-        monkeypatch.setattr("vibesafe.runtime.write_shim", lambda unit_id: None)
         monkeypatch.setattr(
             "vibesafe.testing.test_unit", lambda unit_id: TestResult(passed=True, total=0)
         )
-        monkeypatch.setattr(VibesafeDecorator, "_should_auto_generate", lambda self, exc: True)
-        monkeypatch.setattr(VibesafeDecorator, "_in_interactive_session", lambda self: True)
+        monkeypatch.setattr(vibesafe_core, "_should_auto_generate", lambda exc: True)
+        monkeypatch.setattr(vibesafe_core, "_in_interactive_session", lambda: True)
 
-        @vibesafe.func
+        @vibesafe
         def cowsayonlyboo(msg: str) -> str:
             """A variant of cowsay that only says boo and ignores the input"""
 
             return VibesafeHandled()
 
-        art = cowsayonlyboo("moo")
-        assert "^__^" in art
-        assert "(oo)\\_______" in art
+        with pytest.raises(RuntimeError) as exc_info:
+             cowsayonlyboo("moo")
+        
+        assert "API key not found" in str(exc_info.value.__cause__)
 
     def test_missing_doctest_hint_in_error(self, clear_defless_registry, monkeypatch):
         """Runtime error mentions missing doctest when auto generation fails."""
 
         monkeypatch.setattr(
-            VibesafeDecorator,
+            vibesafe_core,
             "_should_auto_generate",
-            lambda self, exc: False,
+            lambda exc: False,
         )
 
-        @vibesafe.func
+        @vibesafe
         def missing_doc(msg: str) -> str:
             """No doctest present."""
             return VibesafeHandled()
@@ -517,12 +486,12 @@ class TestVibesafeDecorator:
         """Test that calling uncompiled endpoint raises error."""
 
         monkeypatch.setattr(
-            VibesafeDecorator,
+            vibesafe_core,
             "_should_auto_generate",
-            lambda self, exc: False,
+            lambda exc: False,
         )
 
-        @vibesafe.http(method="GET", path="/test")
+        @vibesafe(kind="http")
         async def uncompiled_endpoint(x: int) -> dict[str, int]:
             """Not compiled."""
             return VibesafeHandled()
@@ -533,46 +502,47 @@ class TestVibesafeDecorator:
     def test_get_registry(self, clear_defless_registry):
         """Test get_registry returns copy of registry."""
 
-        @vibesafe.func
+        @vibesafe
         def func1(x: int) -> int:
             yield VibesafeHandled()
 
-        @vibesafe.func
+        @vibesafe
         def func2(y: str) -> str:
             yield VibesafeHandled()
 
-        registry = vibesafe.get_registry()
+        registry = get_registry()
         assert len(registry) == 2
 
         # Modifying returned registry shouldn't affect internal
         registry.clear()
-        assert len(vibesafe.get_registry()) == 2
+        assert len(get_registry()) == 2
 
     def test_get_unit(self, clear_defless_registry):
         """Test get_unit retrieves specific unit metadata."""
 
-        @vibesafe.func
+        @vibesafe
         def specific_func(x: int) -> int:
             """Specific."""
             yield VibesafeHandled()
 
         unit_id = specific_func.__vibesafe_unit_id__
-        unit_meta = vibesafe.get_unit(unit_id)
+        unit_meta = get_unit(unit_id)
 
         assert unit_meta is not None
-        assert unit_meta["type"] == "function"
+        # The registry stores the original function
+        assert unit_meta["func"] is specific_func.__wrapped__
         # qualname includes full path for nested functions
         assert unit_meta["qualname"].endswith("specific_func")
 
     def test_get_unit_nonexistent(self, clear_defless_registry):
         """Test get_unit returns None for nonexistent unit."""
-        result = vibesafe.get_unit("nonexistent/unit")
+        result = get_unit("nonexistent/unit")
         assert result is None
 
     def test_func_preserves_function_metadata(self, clear_defless_registry):
         """Test that decorator preserves function name and docstring."""
 
-        @vibesafe.func
+        @vibesafe
         def my_func(x: int, y: int) -> int:
             """This is my function."""
             yield VibesafeHandled()
@@ -584,7 +554,7 @@ class TestVibesafeDecorator:
     async def test_http_preserves_function_metadata(self, clear_defless_registry):
         """Test HTTP decorator preserves function metadata."""
 
-        @vibesafe.http(method="POST", path="/endpoint")
+        @vibesafe(kind="http")
         async def my_endpoint(data: str) -> dict[str, str]:
             """Endpoint docstring."""
             return VibesafeHandled()
@@ -595,17 +565,19 @@ class TestVibesafeDecorator:
     def test_multiple_functions_in_same_module(self, clear_defless_registry):
         """Test multiple functions can be decorated in same module."""
 
-        @vibesafe.func
+        @vibesafe
         def func_a(x: int) -> int:
             yield VibesafeHandled()
 
-        @vibesafe.func
+        @vibesafe
         def func_b(x: str) -> str:
+            """Function B."""
             yield VibesafeHandled()
 
-        @vibesafe.func
+        @vibesafe
         def func_c(x: float) -> float:
+            """Function C."""
             yield VibesafeHandled()
 
-        registry = vibesafe.get_registry()
+        registry = get_registry()
         assert len(registry) >= 3

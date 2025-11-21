@@ -20,7 +20,7 @@ from vibesafe.exceptions import (
 )
 
 
-def load_active(
+def load_checkpoint(
     unit_id: str,
     verify_hash: bool = True,
     *,
@@ -203,59 +203,6 @@ def _read_spec_hash(checkpoint_dir: Path) -> str | None:
     return spec_hash if isinstance(spec_hash, str) else None
 
 
-def build_shim(unit_id: str) -> str:
-    """
-    Build shim code that loads the active checkpoint.
-
-    Args:
-        unit_id: Unit identifier
-
-    Returns:
-        Shim code as string
-    """
-    func_name = unit_id.split("/")[-1]
-
-    return f"""# AUTO-GENERATED SHIM BY VIBESAFE
-# Unit: {unit_id}
-# This file imports the active checkpoint implementation.
-
-from vibesafe.runtime import load_active
-
-{func_name} = load_active("{unit_id}")
-"""
-
-
-def write_shim(unit_id: str) -> Path:
-    """
-    Write shim file for a unit.
-
-    Args:
-        unit_id: Unit identifier (e.g., "app.math.ops/sum_str")
-
-    Returns:
-        Path to written shim file
-    """
-    config = get_config()
-
-    # Parse unit_id to get module path
-    # e.g., "app.math.ops/sum_str" -> app/math/ops.py
-    module_path, _func_name = unit_id.rsplit("/", 1)
-    module_file_path = module_path.replace(".", "/") + ".py"
-
-    # Get __generated__ directory
-    generated_base = config.resolve_path(config.paths.generated)
-    shim_path = generated_base / module_file_path
-
-    # Create parent directories
-    shim_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Build and write shim
-    shim_code = build_shim(unit_id)
-    shim_path.write_text(shim_code)
-
-    return shim_path
-
-
 def update_index(unit_id: str, active_hash: str, *, created: str | None = None) -> None:
     """
     Update index.toml with active checkpoint for a unit.
@@ -296,7 +243,3 @@ def update_index(unit_id: str, active_hash: str, *, created: str | None = None) 
                 f.write(f'{key} = "{value}"\n')
             f.write("\n")
 
-
-# Backwards compatibility exports
-CheckpointNotFoundError = VibesafeCheckpointMissing
-HashMismatchError = VibesafeHashMismatch

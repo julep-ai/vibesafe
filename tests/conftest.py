@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+import vibesafe.core as vibesafe_core
 from vibesafe import VibesafeHandled, vibesafe
 from vibesafe.config import VibesafeConfig, get_config
 
@@ -82,7 +83,7 @@ def test_config(config_file: Path, monkeypatch: pytest.MonkeyPatch) -> VibesafeC
 def sample_function() -> Callable[..., Any]:
     """Sample function for testing."""
 
-    @vibesafe.func
+    @vibesafe
     def add_numbers(a: int, b: int) -> int:
         """
         Add two numbers.
@@ -101,7 +102,7 @@ def sample_function() -> Callable[..., Any]:
 def sample_async_function() -> Callable[..., Any]:
     """Sample async function for testing."""
 
-    @vibesafe.http(method="POST", path="/test")
+    @vibesafe(kind="http")
     async def test_endpoint(x: int) -> dict[str, int]:
         """
         Test endpoint.
@@ -199,13 +200,16 @@ def clear_defless_registry():
     """Clear vibesafe registry between tests."""
     # Ensure default example modules are registered once so the baseline registry matches docs
     if not getattr(clear_defless_registry, "_seeded", False):
-        for module in ("examples.math.ops", "examples.api.routes"):
-            importlib.import_module(module)
+        try:
+            for module in ("examples.math.ops", "examples.api.routes"):
+                importlib.import_module(module)
+        except ImportError:
+            pass # Examples might not be in path during tests
         clear_defless_registry._seeded = True
 
     # Store original registry
-    original = vibesafe._registry.copy()
-    vibesafe._registry.clear()
+    original = vibesafe_core._registry.copy()
+    vibesafe_core._registry.clear()
 
     # Remove index file so tests start without active checkpoints
     config = get_config(reload=True)
@@ -216,8 +220,8 @@ def clear_defless_registry():
     yield
 
     # Restore original registry
-    vibesafe._registry.clear()
-    vibesafe._registry.update(original)
+    vibesafe_core._registry.clear()
+    vibesafe_core._registry.update(original)
 
 
 @pytest.fixture(autouse=True)

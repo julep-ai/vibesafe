@@ -32,7 +32,7 @@ class TestMCPServer:
     def test_handle_request_scan(self, clear_defless_registry):
         """Test handling scan request."""
 
-        @vibesafe.func
+        @vibesafe
         def test_func(x: int) -> int:
             """Test."""
             yield VibesafeHandled()
@@ -78,11 +78,11 @@ class TestMCPServer:
     def test_scan_method(self, clear_defless_registry):
         """Test scan method."""
 
-        @vibesafe.func
+        @vibesafe
         def func1(x: int) -> int:
             yield VibesafeHandled()
 
-        @vibesafe.func
+        @vibesafe
         def func2(y: str) -> str:
             yield VibesafeHandled()
 

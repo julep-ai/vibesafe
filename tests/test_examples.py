@@ -22,22 +22,22 @@ class TestMathExamples:
         from examples.math.ops import sum_str
 
         assert hasattr(sum_str, "__vibesafe_unit_id__")
-        assert hasattr(sum_str, "__vibesafe_type__")
-        assert sum_str.__vibesafe_type__ == "function"
+        # Check kind if it's set, default is None which implies function
+        assert getattr(sum_str, "__vibesafe_kind__", None) is None
 
     def test_fibonacci_definition(self, clear_defless_registry):
         """Test fibonacci function is properly defined."""
         from examples.math.ops import fibonacci
 
         assert hasattr(fibonacci, "__vibesafe_unit_id__")
-        assert fibonacci.__vibesafe_type__ == "function"
+        assert getattr(fibonacci, "__vibesafe_kind__", None) is None
 
     def test_is_prime_definition(self, clear_defless_registry):
         """Test is_prime function is properly defined."""
         from examples.math.ops import is_prime
 
         assert hasattr(is_prime, "__vibesafe_unit_id__")
-        assert is_prime.__vibesafe_type__ == "function"
+        assert getattr(is_prime, "__vibesafe_kind__", None) is None
 
     def test_sum_str_spec(self, clear_defless_registry):
         """Test sum_str has correct spec."""
@@ -81,7 +81,7 @@ class TestAPIExamples:
         from examples.api.routes import sum_endpoint
 
         assert hasattr(sum_endpoint, "__vibesafe_unit_id__")
-        assert sum_endpoint.__vibesafe_type__ == "http"
+        assert sum_endpoint.__vibesafe_kind__ == "http"
         assert sum_endpoint.__vibesafe_method__ == "POST"
         assert sum_endpoint.__vibesafe_path__ == "/sum"
 
@@ -90,7 +90,7 @@ class TestAPIExamples:
         from examples.api.routes import hello_endpoint
 
         assert hasattr(hello_endpoint, "__vibesafe_unit_id__")
-        assert hello_endpoint.__vibesafe_type__ == "http"
+        assert hello_endpoint.__vibesafe_kind__ == "http"
         assert hello_endpoint.__vibesafe_method__ == "GET"
         assert hello_endpoint.__vibesafe_path__ == "/hello/{name}"
 
@@ -123,9 +123,9 @@ class TestExampleRegistry:
     def test_all_examples_registered(self):
         """Test that all example functions are registered."""
         # Examples are imported at module level, so they should be registered
-        from vibesafe.core import vibesafe
+        from vibesafe.core import get_registry
 
-        registry = vibesafe.get_registry()
+        registry = get_registry()
 
         # Should have at least 5 units (3 math + 2 api)
         assert len(registry) >= 5
@@ -138,13 +138,14 @@ class TestExampleRegistry:
 
     def test_example_types(self):
         """Test example function types."""
-        from vibesafe.core import vibesafe
+        from vibesafe.core import get_registry
 
-        registry = vibesafe.get_registry()
+        registry = get_registry()
 
         # Count function vs http types
-        func_count = sum(1 for meta in registry.values() if meta["type"] == "function")
-        http_count = sum(1 for meta in registry.values() if meta["type"] == "http")
+        # Note: function type is None in registry kind
+        func_count = sum(1 for meta in registry.values() if meta.get("kind") is None)
+        http_count = sum(1 for meta in registry.values() if meta.get("kind") == "http")
 
         assert func_count >= 3
         assert http_count >= 2

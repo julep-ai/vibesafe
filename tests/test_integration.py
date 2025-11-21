@@ -4,7 +4,7 @@ Integration tests for vibesafe end-to-end workflows.
 
 import pytest
 
-from vibesafe import VibesafeHandled, vibesafe
+from vibesafe import VibesafeHandled, get_registry, get_unit, vibesafe
 
 
 @pytest.mark.integration
@@ -21,7 +21,7 @@ class TestEndToEndWorkflow:
         config_module._config = test_config
 
         # Step 1: Define a function
-        @vibesafe.func
+        @vibesafe
         def multiply(a: int, b: int) -> int:
             """
             Multiply two numbers.
@@ -46,7 +46,7 @@ def multiply(a: int, b: int) -> int:
         # Step 2: Generate code
         from vibesafe.codegen import CodeGenerator
 
-        unit_meta = vibesafe.get_unit(unit_id)
+        unit_meta = get_unit(unit_id)
         generator = CodeGenerator(unit_id, unit_meta)
         generator.provider = mock_provider
 
@@ -73,9 +73,9 @@ def multiply(a: int, b: int) -> int:
         assert result.passed
 
         # Step 5: Load and use
-        from vibesafe.runtime import load_active
+        from vibesafe.runtime import load_checkpoint
 
-        impl = load_active(unit_id, verify_hash=False)
+        impl = load_checkpoint(unit_id, verify_hash=False)
         assert impl(3, 4) == 12
         assert impl(5, 2) == 10
 
@@ -90,7 +90,7 @@ def multiply(a: int, b: int) -> int:
         config_module._config = test_config
 
         # Define endpoint
-        @vibesafe.http(method="POST", path="/double")
+        @vibesafe(kind="http", method="POST", path="/double")
         async def double_endpoint(value: int) -> dict[str, int]:
             """
             Double a number.
@@ -102,7 +102,7 @@ def multiply(a: int, b: int) -> int:
             return VibesafeHandled()
 
         unit_id = double_endpoint.__vibesafe_unit_id__
-        assert vibesafe.get_unit(unit_id)["type"] == "http"
+        assert get_unit(unit_id)["kind"] == "http"
 
     @pytest.mark.integration
     def test_multiple_functions_workflow(
@@ -115,22 +115,22 @@ def multiply(a: int, b: int) -> int:
         config_module._config = test_config
 
         # Define multiple functions
-        @vibesafe.func
+        @vibesafe
         def func_a(x: int) -> int:
             """Function A."""
             yield VibesafeHandled()
 
-        @vibesafe.func
+        @vibesafe
         def func_b(x: str) -> str:
             """Function B."""
             yield VibesafeHandled()
 
-        @vibesafe.func
+        @vibesafe
         def func_c(x: float) -> float:
             """Function C."""
             yield VibesafeHandled()
 
-        registry = vibesafe.get_registry()
+        registry = get_registry()
         assert len([u for u in registry if "func_a" in u or "func_b" in u or "func_c" in u]) >= 3
 
     @pytest.mark.integration
@@ -169,7 +169,7 @@ api_key_env = "CUSTOM_API_KEY"
     def test_spec_extraction_workflow(self, clear_defless_registry):
         """Test spec extraction from decorated function."""
 
-        @vibesafe.func
+        @vibesafe
         def example_func(a: int, b: int, c: str = "default") -> str:
             """
             Example function with parameters.
@@ -207,6 +207,7 @@ api_key_env = "CUSTOM_API_KEY"
             body_before_handled="x = x + 1",
             template_id="function.j2",
             provider_model="gpt-4o-mini",
+            provider_params={},
             dependency_digest="",
         )
 
@@ -222,26 +223,6 @@ api_key_env = "CUSTOM_API_KEY"
         assert len(prompt_hash) == 64
         assert len(chk_hash) == 64
         assert spec_hash != prompt_hash != chk_hash
-
-    @pytest.mark.integration
-    def test_shim_generation_workflow(self, test_config, temp_dir, monkeypatch):
-        """Test shim generation and writing."""
-        monkeypatch.chdir(temp_dir)
-        from vibesafe import config as config_module
-
-        config_module._config = test_config
-
-        from vibesafe.runtime import build_shim, write_shim
-
-        # Build shim
-        shim_code = build_shim("app.math.ops/add_func")
-        assert "load_active" in shim_code
-        assert "add_func" in shim_code
-
-        # Write shim
-        shim_path = write_shim("app.math.ops/add_func")
-        assert shim_path.exists()
-        assert shim_path.read_text() == shim_code
 
     @pytest.mark.integration
     def test_index_management_workflow(self, test_config, temp_dir, monkeypatch):
@@ -293,15 +274,15 @@ class TestErrorHandling:
         config_module._config = test_config
 
         from vibesafe.exceptions import VibesafeCheckpointMissing
-        from vibesafe.runtime import load_active
+        from vibesafe.runtime import load_checkpoint
 
         with pytest.raises(VibesafeCheckpointMissing):
-            load_active("nonexistent/unit")
+            load_checkpoint("nonexistent/unit")
 
     def test_uncompiled_function_error(self, clear_defless_registry):
         """Test error when calling uncompiled function."""
 
-        @vibesafe.func
+        @vibesafe
         def uncompiled(x: int) -> int:
             """Not compiled."""
             yield VibesafeHandled()

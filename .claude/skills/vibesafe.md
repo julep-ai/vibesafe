@@ -40,11 +40,39 @@ api_key_env = "OPENAI_API_KEY"
 checkpoints = ".vibesafe/checkpoints"
 cache = ".vibesafe/cache"
 index = ".vibesafe/index.toml"
-generated = "__generated__"
 
 [prompts]
 function = "prompts/function.j2"
 http = "prompts/http_endpoint.j2"
+```
+
+### Template Resolution
+
+Templates are resolved via `resolve_template_id()` from `vibesafe.config`:
+
+**Resolution priority:**
+1. Explicit `template` param on decorator
+2. Type-based config default:
+   - `http` units → `config.prompts.http`
+   - `function` units → `config.prompts.function`
+
+**Example:**
+```python
+from vibesafe.config import resolve_template_id
+
+# Unit with explicit template
+meta = {"template": "custom.j2"}
+assert resolve_template_id(meta) == "custom.j2"
+
+# Unit defaulting by type
+meta = {"kind": "http"}
+assert resolve_template_id(meta) == "prompts/http_endpoint.j2"
+
+meta = {"kind": "function"}
+assert resolve_template_id(meta) == "prompts/function.j2"
+
+Impact on hashing: Template ID contributes to spec hash, so changing template (via
+decorator or config) changes the hash.
 ```
 
 2. **Set API key:**
@@ -55,7 +83,6 @@ export OPENAI_API_KEY="your-api-key-here"
 3. **Add .vibesafe/ to .gitignore:**
 ```gitignore
 .vibesafe/cache/      # LLM response cache (optional)
-__generated__/       # Generated shims (optional)
 ```
 
 ## Writing Specs
@@ -191,6 +218,31 @@ def test_add_identity(a: int):
 - Find edge cases you might miss
 - Provide stronger verification than examples alone
 
+## Core API
+
+Vibesafe uses module-level decorators and registry functions:
+
+```python
+from vibesafe import vibesafe
+from vibesafe.core import get_registry, get_unit
+
+@vibesafe.func
+def my_function(...):
+    """Decorator registers to global module-level registry"""
+    yield VibesafeHandled()
+
+# Access registry
+registry = get_registry()  # Returns dict[str, dict[str, Any]]
+
+# Get specific unit
+unit_meta = get_unit("module.path/function_name")  # Returns dict | None
+
+Key functions:
+- get_registry() → Global registry of all decorated units
+- get_unit(unit_id) → Metadata for specific unit
+- resolve_template_id(unit_meta, config) → Determine template path
+```
+
 ## CLI Commands
 
 ### Scan for Units
@@ -199,9 +251,11 @@ def test_add_identity(a: int):
 # List all vibesafe-decorated functions
 vibesafe scan
 
-# List and generate shims
+# List and generate shims (DEPRECATED)
 vibesafe scan --write-shims
 ```
+
+**Note:** `--write-shims` is deprecated as of v0.2. The shim system is no longer needed for importing generated code.
 
 **Output shows:**
 - Unit ID (module path + function name)
@@ -234,7 +288,6 @@ vibesafe compile --force
 6. Validates implementation (checks function signature)
 7. Saves generated code to checkpoint
 8. Updates index.toml
-9. Writes __generated__ shim
 
 ### Test Generated Code
 
@@ -330,17 +383,18 @@ vibesafe repl --target app.math.ops/fibonacci
 
 ## Using Generated Code
 
-### Import from __generated__ (Recommended)
+### Direct Import (Recommended)
 
 ```python
-# After compilation and successful tests
-from __generated__.app.math.ops import fibonacci
+# Decorated function automatically loads generated code
+from app.math.ops import fibonacci
 
-result = fibonacci(10)  # Uses AI-generated implementation
+# When called, this loads the active checkpoint
+result = fibonacci(10)
 print(f"fibonacci(10) = {result}")
 ```
 
-**Note:** `__generated__` shims may only contain one function at a time depending on when they were written. Use the runtime loader for reliable access to multiple functions.
+**Note:** This works when the checkpoint has been saved/activated. The decorator intercepts the import and loads from `.vibesafe/checkpoints/`.
 
 ### Using the Runtime Loader (Most Reliable)
 
@@ -384,7 +438,7 @@ result = fibonacci(10)
 vim app/math/ops.py
 
 # 2. Scan to verify registration
-vibesafe scan --write-shims
+vibesafe scan
 
 # 3. Check status before compilation
 vibesafe status
@@ -443,7 +497,7 @@ vibesafe save
 Vibesafe is organized into specialized modules in `src/vibesafe/`:
 
 **Core System:**
-- **core.py** - `VibesafeDecorator` class and `@vibesafe.func`/`@vibesafe.http` decorators
+- **core.py** - Module-level decorators (`@vibesafe.func`/`@vibesafe.http`) and registry (`get_registry()`, `get_unit()`)
 - **ast_parser.py** - `SpecExtractor` class for parsing function specs using Python AST
 - **codegen.py** - `CodeGenerator` pipeline for orchestrating code generation
 - **runtime.py** - Checkpoint loading (`load_active()`, `write_shim()`, `update_index()`)
@@ -497,11 +551,7 @@ myproject/
 ├── vibesafe.toml           # Configuration
 ├── app/
 │   └── math/
-│       └── ops.py         # Your specs
-├── __generated__/         # Auto-generated shims
-│   └── app/
-│       └── math/
-│           └── ops.py     # import from here
+│       └── ops.py         # Your specs (decorated functions)
 └── .vibesafe/
     ├── checkpoints/       # Generated implementations
     │   └── app/math/ops/fibonacci/
@@ -728,18 +778,18 @@ seed = 43  # Try different seed
 
 ### Import Errors
 
-**Problem:** Can't import from __generated__
+**Problem:** Can't import decorated functions
 
 **Solution:**
 ```bash
-# Regenerate shims
-vibesafe scan --write-shims
+# Check that function was compiled and saved
+vibesafe scan
 
-# Check index
+# Check index for active checkpoints
 cat .vibesafe/index.toml
 
-# Verify checkpoint exists
-vibesafe scan
+# Verify checkpoint exists and is active
+vibesafe status
 ```
 
 ### API Key Issues
@@ -897,8 +947,8 @@ vibesafe repl --target module/func         # Interactive compile/test loop
 python -m vibesafe.mcp                     # Run MCP server (stdio)
 
 # Import Generated Code
-from __generated__.module import func      # Use generated code (shim)
-from vibesafe.runtime import load_active   # Load by unit ID (recommended)
+from module import func                    # Direct import (recommended)
+from vibesafe.runtime import load_active   # Load by unit ID
 func = load_active("module/func")
 ```
 
@@ -1229,13 +1279,11 @@ api_key_env = "OPENAI_API_KEY"
 checkpoints = ".vibesafe/checkpoints"
 cache = ".vibesafe/cache"
 index = ".vibesafe/index.toml"
-generated = "__generated__"
 EOF
 
 # 3. Set up git
 git init
 echo ".vibesafe/cache/" >> .gitignore
-echo "__generated__/" >> .gitignore
 
 # 4. Set API key
 export OPENAI_API_KEY="your-key"
@@ -1269,7 +1317,7 @@ vibesafe check
 vibesafe save --freeze-http-deps
 
 # 5. Commit everything
-git add .vibesafe/checkpoints .vibesafe/index.toml requirements.vibesafe.txt
+git add .vibesafe/checkpoints .vibesafe/index.toml vibesafe.toml requirements.vibesafe.txt
 git commit -m "Add vibesafe checkpoints for v1.0"
 
 # 6. Deploy
@@ -1319,6 +1367,19 @@ jobs:
 - **Templates:** See `prompts/` directory for Jinja2 prompt templates
 - **Issue Tracker:** Report bugs and request features on GitHub
 - **Documentation:** This skill file is the most comprehensive guide
+
+## Reference Information
+
+**Git changes summary:**
+- `src/vibesafe/core.py`: Refactored from `VibesafeDecorator` class to module-level `_registry` with `get_registry()` and `get_unit()` helpers
+- `src/vibesafe/cli.py`: Deprecated `--write-shims`, removed automatic shim writing
+- `src/vibesafe/config.py`: Added `resolve_template_id()` function
+
+**Key file locations:**
+- Skills file: `.claude/skills/vibesafe.md`
+- Core module: `src/vibesafe/core.py`
+- Config module: `src/vibesafe/config.py`
+- CLI module: `src/vibesafe/cli.py`
 
 ## Skill Usage Guidelines
 

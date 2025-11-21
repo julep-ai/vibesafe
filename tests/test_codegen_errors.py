@@ -2,7 +2,7 @@
 
 import pytest
 
-from vibesafe import VibesafeHandled, vibesafe
+from vibesafe import VibesafeHandled, get_unit, vibesafe
 from vibesafe.codegen import CodeGenerator
 from vibesafe.exceptions import (
     VibesafeMissingDoctest,
@@ -19,13 +19,13 @@ class TestCodegenErrors:
         """Generating a unit without doctests should raise VibesafeMissingDoctest."""
         self._prepare_config(monkeypatch, test_config, temp_dir)
 
-        @vibesafe.func
+        @vibesafe
         def no_doctest(x: int) -> int:
             """Docstring without doctest examples."""
             yield VibesafeHandled()
 
         unit_id = no_doctest.__vibesafe_unit_id__
-        unit_meta = vibesafe.get_unit(unit_id)
+        unit_meta = get_unit(unit_id)
 
         mocker.patch("vibesafe.codegen.get_provider")
 
@@ -38,7 +38,7 @@ class TestCodegenErrors:
         """Provider failures are wrapped in VibesafeProviderError."""
         self._prepare_config(monkeypatch, test_config, temp_dir)
 
-        @vibesafe.func
+        @vibesafe
         def has_doctest(x: int) -> int:
             """
             Simple function.
@@ -49,7 +49,7 @@ class TestCodegenErrors:
             yield VibesafeHandled()
 
         unit_id = has_doctest.__vibesafe_unit_id__
-        unit_meta = vibesafe.get_unit(unit_id)
+        unit_meta = get_unit(unit_id)
 
         mock_provider = mocker.MagicMock()
         mock_provider.complete.side_effect = RuntimeError("boom")
@@ -64,7 +64,7 @@ class TestCodegenErrors:
         """Generated code that omits the expected function triggers VibesafeValidationError."""
         self._prepare_config(monkeypatch, test_config, temp_dir)
 
-        @vibesafe.func
+        @vibesafe
         def spec_with_doctest(x: int) -> int:
             """
             Spec with doctest.
@@ -75,7 +75,7 @@ class TestCodegenErrors:
             yield VibesafeHandled()
 
         unit_id = spec_with_doctest.__vibesafe_unit_id__
-        unit_meta = vibesafe.get_unit(unit_id)
+        unit_meta = get_unit(unit_id)
 
         mock_provider = mocker.MagicMock()
         mock_provider.complete.return_value = "# generated with no function"

@@ -12,13 +12,13 @@ else:
     pass
 
 from vibesafe.exceptions import VibesafeCheckpointMissing, VibesafeHashMismatch
-from vibesafe.runtime import build_shim, load_active, update_index, write_shim
+from vibesafe.runtime import load_checkpoint, update_index
 
 
-class TestLoadActive:
-    """Tests for load_active function."""
+class TestLoadCheckpoint:
+    """Tests for load_checkpoint function."""
 
-    def test_load_active_no_index_raises(self, test_config, temp_dir, monkeypatch):
+    def test_load_checkpoint_no_index_raises(self, test_config, temp_dir, monkeypatch):
         """Test loading without index raises error."""
         monkeypatch.chdir(temp_dir)
         from vibesafe import config as config_module
@@ -26,9 +26,9 @@ class TestLoadActive:
         config_module._config = test_config
 
         with pytest.raises(VibesafeCheckpointMissing, match="No index found"):
-            load_active("test/unit")
+            load_checkpoint("test/unit")
 
-    def test_load_active_no_unit_in_index_raises(self, test_config, temp_dir, monkeypatch):
+    def test_load_checkpoint_no_unit_in_index_raises(self, test_config, temp_dir, monkeypatch):
         """Test loading unit not in index raises error."""
         index_path = temp_dir / ".vibesafe" / "index.toml"
         index_path.parent.mkdir(parents=True)
@@ -40,9 +40,9 @@ class TestLoadActive:
         config_module._config = test_config
 
         with pytest.raises(VibesafeCheckpointMissing, match="No active checkpoint"):
-            load_active("test/unit")
+            load_checkpoint("test/unit")
 
-    def test_load_active_missing_checkpoint_dir_raises(self, test_config, temp_dir, monkeypatch):
+    def test_load_checkpoint_missing_checkpoint_dir_raises(self, test_config, temp_dir, monkeypatch):
         """Test loading with missing checkpoint directory raises error."""
         index_path = temp_dir / ".vibesafe" / "index.toml"
         index_path.parent.mkdir(parents=True)
@@ -54,9 +54,9 @@ class TestLoadActive:
         config_module._config = test_config
 
         with pytest.raises(VibesafeCheckpointMissing, match="Checkpoint directory"):
-            load_active("test/unit")
+            load_checkpoint("test/unit")
 
-    def test_load_active_success(
+    def test_load_checkpoint_success(
         self, test_config, temp_dir, checkpoint_dir, sample_impl, sample_meta, monkeypatch
     ):
         """Test successfully loading active checkpoint."""
@@ -76,11 +76,11 @@ class TestLoadActive:
 
         config_module._config = test_config
 
-        func = load_active("test/func", verify_hash=False)
+        func = load_checkpoint("test/func", verify_hash=False)
         result = func(2, 3)
         assert result == 5
 
-    def test_load_active_spec_hash_mismatch(
+    def test_load_checkpoint_spec_hash_mismatch(
         self, test_config, temp_dir, checkpoint_dir, sample_impl, sample_meta, monkeypatch
     ):
         """Providing an expected spec hash that differs should raise."""
@@ -100,9 +100,9 @@ class TestLoadActive:
         config_module._config = test_config
 
         with pytest.raises(VibesafeHashMismatch, match="Spec hash mismatch"):
-            load_active("test/func", verify_hash=False, expected_spec_hash="different")
+            load_checkpoint("test/func", verify_hash=False, expected_spec_hash="different")
 
-    def test_load_active_hash_mismatch(
+    def test_load_checkpoint_hash_mismatch(
         self, test_config, temp_dir, checkpoint_dir, sample_impl, sample_meta, monkeypatch
     ):
         """Hash mismatches in prod mode should raise VibesafeHashMismatch."""
@@ -128,63 +128,7 @@ class TestLoadActive:
         config_module._config = test_config
 
         with pytest.raises(VibesafeHashMismatch):
-            load_active("test/func")
-
-
-class TestBuildShim:
-    """Tests for build_shim function."""
-
-    def test_build_shim_basic(self):
-        """Test building basic shim."""
-        shim_code = build_shim("app.math.ops/add_numbers")
-        assert "AUTO-GENERATED" in shim_code
-        assert "app.math.ops/add_numbers" in shim_code
-        assert "load_active" in shim_code
-        assert "add_numbers = " in shim_code
-
-    def test_build_shim_different_unit(self):
-        """Test building shim for different unit."""
-        shim_code = build_shim("my.module/my_func")
-        assert "my.module/my_func" in shim_code
-        assert "my_func = " in shim_code
-
-
-class TestWriteShim:
-    """Tests for write_shim function."""
-
-    def test_write_shim_creates_file(self, test_config, temp_dir, monkeypatch):
-        """Test that write_shim creates shim file."""
-        monkeypatch.chdir(temp_dir)
-        from vibesafe import config as config_module
-
-        config_module._config = test_config
-
-        shim_path = write_shim("app.math.ops/add_numbers")
-        assert shim_path.exists()
-        assert shim_path.name == "ops.py"
-        assert "__generated__" in str(shim_path)
-
-    def test_write_shim_creates_directories(self, test_config, temp_dir, monkeypatch):
-        """Test that write_shim creates parent directories."""
-        monkeypatch.chdir(temp_dir)
-        from vibesafe import config as config_module
-
-        config_module._config = test_config
-
-        shim_path = write_shim("deep.nested.module.path/func")
-        assert shim_path.parent.exists()
-
-    def test_write_shim_content(self, test_config, temp_dir, monkeypatch):
-        """Test content of written shim file."""
-        monkeypatch.chdir(temp_dir)
-        from vibesafe import config as config_module
-
-        config_module._config = test_config
-
-        shim_path = write_shim("test.module/test_func")
-        content = shim_path.read_text()
-        assert "test.module/test_func" in content
-        assert "test_func = load_active" in content
+            load_checkpoint("test/func")
 
 
 class TestUpdateIndex:

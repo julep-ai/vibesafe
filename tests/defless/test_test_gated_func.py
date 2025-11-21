@@ -1,7 +1,7 @@
 """Auto-generated doctest harness for test/gated_func."""
 
 import doctest
-from vibesafe.runtime import load_active
+from vibesafe.runtime import load_checkpoint
 
 UNIT_ID = 'test/gated_func'
 FUNC_NAME = 'gated_func'
@@ -13,7 +13,7 @@ def _exec_properties(func) -> None:
     if not PROPERTY_SRC:
         return
     namespace = {
-        "load_active": load_active,
+        "load_checkpoint": load_checkpoint,
         "UNIT_ID": UNIT_ID,
         "FUNC_NAME": FUNC_NAME,
         "func": func,
@@ -46,6 +46,6 @@ def _run_doctests(func) -> None:
 
 
 def test_doctests() -> None:
-    func = load_active(UNIT_ID)
+    func = load_checkpoint(UNIT_ID)
     _run_doctests(func)
     _exec_properties(func)

@@ -5,7 +5,7 @@ Example vibesafe HTTP endpoints.
 from vibesafe import VibesafeHandled, vibesafe
 
 
-@vibesafe.http(method="POST", path="/sum")
+@vibesafe(kind="http", method="POST", path="/sum")
 async def sum_endpoint(a: int, b: int) -> dict[str, int]:
     """
     Add two numbers and return the result.
@@ -21,7 +21,7 @@ async def sum_endpoint(a: int, b: int) -> dict[str, int]:
     return VibesafeHandled()
 
 
-@vibesafe.http(method="GET", path="/hello/{name}")
+@vibesafe(kind="http", method="GET", path="/hello/{name}")
 async def hello_endpoint(name: str) -> dict[str, str]:
     """
     Greet a user by name.

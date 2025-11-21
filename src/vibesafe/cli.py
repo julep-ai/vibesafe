@@ -13,9 +13,9 @@ from vibesafe import __version__
 from vibesafe.ast_parser import extract_spec
 from vibesafe.codegen import generate_for_unit
 from vibesafe.config import get_config
-from vibesafe.core import vibesafe
+from vibesafe.core import get_registry, get_unit
 from vibesafe.hashing import compute_dependency_digest, compute_spec_hash
-from vibesafe.runtime import update_index, write_shim
+from vibesafe.runtime import update_index
 from vibesafe.testing import run_all_tests, test_unit
 
 console = Console()
@@ -32,7 +32,7 @@ def main() -> None:
 @click.option(
     "--write-shims",
     is_flag=True,
-    help="Write __generated__ shim files",
+    help="Write __generated__ shim files (DEPRECATED)",
 )
 def scan(write_shims: bool) -> None:
     """
@@ -43,7 +43,7 @@ def scan(write_shims: bool) -> None:
     # Import all Python files to register decorators
     _import_project_modules()
 
-    registry = vibesafe.get_registry()
+    registry = get_registry()
 
     if not registry:
         console.print("[yellow]No vibesafe units found in project.[/yellow]")
@@ -88,10 +88,7 @@ def scan(write_shims: bool) -> None:
     console.print(f"\n[bold]Total units:[/bold] {len(registry)}")
 
     if write_shims:
-        console.print("\n[bold]Writing shims...[/bold]")
-        for unit_id in active_units:
-            shim_path = write_shim(unit_id)
-            console.print(f"  ✓ {shim_path}")
+        console.print("\n[yellow]Shims are deprecated and no longer needed.[/yellow]")
 
 
 @main.command()
@@ -105,7 +102,7 @@ def compile(target: str | None, force: bool) -> None:
     """
     _import_project_modules()
 
-    registry = vibesafe.get_registry()
+    registry = get_registry()
     if not registry:
         console.print("[red]No vibesafe units found.[/red]")
         sys.exit(1)
@@ -141,10 +138,6 @@ def compile(target: str | None, force: bool) -> None:
                 created=checkpoint_info.get("created_at"),
             )
             console.print("  ✓ Updated index")
-
-            # Write shim
-            shim_path = write_shim(unit_id)
-            console.print(f"  ✓ Wrote shim: {shim_path}")
 
         except Exception as e:
             console.print(f"  [red]✗ Error: {e}[/red]")
@@ -211,7 +204,7 @@ def save(target: str | None, freeze_http_deps: bool) -> None:
     """
     _import_project_modules()
 
-    registry = vibesafe.get_registry()
+    registry = get_registry()
     if target:
         console.print(f"[bold]Saving {target}...[/bold]\n")
         result = test_unit(target)
@@ -247,7 +240,7 @@ def status() -> None:
     """Summarize registry state and checkpoint drift."""
     _import_project_modules()
 
-    registry = vibesafe.get_registry()
+    registry = get_registry()
     if not registry:
         console.print("[yellow]No vibesafe units found in project.[/yellow]")
         return
@@ -320,7 +313,7 @@ def diff(target: str | None) -> None:
     """Show spec hash drift compared to active checkpoints."""
 
     _import_project_modules()
-    registry = vibesafe.get_registry()
+    registry = get_registry()
     if not registry:
         console.print("[yellow]No vibesafe units found in project.[/yellow]")
         return
@@ -455,7 +448,7 @@ def repl(target: str | None) -> None:
     """Interactive compile/test loop for a vibesafe unit."""
 
     _import_project_modules()
-    registry = vibesafe.get_registry()
+    registry = get_registry()
 
     if not registry:
         console.print("[yellow]No vibesafe units found in project.[/yellow]")
@@ -547,13 +540,12 @@ def repl(target: str | None) -> None:
                 checkpoint_info["spec_hash"],
                 created=checkpoint_info.get("created_at"),
             )
-            shim_path = write_shim(target_id)
-            console.print(f"  ✓ spec hash {checkpoint_info['spec_hash'][:8]} • shim {shim_path}")
+            console.print(f"  ✓ spec hash {checkpoint_info['spec_hash'][:8]}")
         except Exception as exc:  # pragma: no cover - surfaced to CLI user
             console.print(f"[red]✗ Generation failed: {exc}[/red]")
             return
 
-        unit_meta = vibesafe.get_unit(target_id) or unit_meta
+        unit_meta = get_unit(target_id) or unit_meta
         _run_tests()
 
     def _run_tests() -> None:
@@ -770,7 +762,7 @@ def _run_command(cmd: list[str]) -> bool:
 def _detect_drift() -> tuple[int, bool]:
     """Return (drift_count, missing_index)."""
 
-    registry = vibesafe.get_registry()
+    registry = get_registry()
     if not registry:
         return 0, False
 
@@ -811,12 +803,10 @@ def _detect_drift() -> tuple[int, bool]:
         )
 
         unit_index = index.get(unit_id, {})
-        active_hash = unit_index.get("active")
-        if not active_hash or active_hash != current_hash:
+        active_hash = unit_index.get("active", "—")
+
+        if active_hash != "—" and active_hash != current_hash:
             drift_count += 1
 
     return drift_count, False
 
-
-if __name__ == "__main__":
-    main()

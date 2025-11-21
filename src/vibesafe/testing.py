@@ -12,7 +12,7 @@ from typing import Any, cast
 
 from vibesafe.ast_parser import extract_spec
 from vibesafe.config import get_config
-from vibesafe.runtime import load_active
+from vibesafe.runtime import load_checkpoint
 
 
 class TestResult:
@@ -239,7 +239,7 @@ def _ensure_defless_harness(
         \"\"\"Auto-generated doctest harness for {unit_id}.\"\"\"
 
         import doctest
-        from vibesafe.runtime import load_active
+        from vibesafe.runtime import load_checkpoint
 
         UNIT_ID = {unit_id!r}
         FUNC_NAME = {func_name!r}
@@ -251,7 +251,7 @@ def _ensure_defless_harness(
             if not PROPERTY_SRC:
                 return
             namespace = {{
-                "load_active": load_active,
+                "load_checkpoint": load_checkpoint,
                 "UNIT_ID": UNIT_ID,
                 "FUNC_NAME": FUNC_NAME,
                 "func": func,
@@ -284,7 +284,7 @@ def _ensure_defless_harness(
 
 
         def test_doctests() -> None:
-            func = load_active(UNIT_ID)
+            func = load_checkpoint(UNIT_ID)
             _run_doctests(func)
             _exec_properties(func)
         """
@@ -322,7 +322,7 @@ def _run_sandbox_checks(
         import sys
 
         try:
-            from vibesafe.runtime import load_active
+            from vibesafe.runtime import load_checkpoint
         except Exception as exc:  # pragma: no cover
             print(json.dumps({"error": f"Failed to import runtime: {exc}"}))
             sys.exit(2)
@@ -341,7 +341,7 @@ def _run_sandbox_checks(
         result = {"failures": [], "total": 0}
 
         try:
-            func = load_active(data["unit_id"])
+            func = load_checkpoint(data["unit_id"])
         except Exception as exc:
             result["failures"].append(f"Failed to load implementation: {exc}")
             print(json.dumps(result))
@@ -369,7 +369,7 @@ def _run_sandbox_checks(
         prop_src = data.get("properties", "")
         if prop_src:
             namespace = {
-                "load_active": load_active,
+                "load_checkpoint": load_checkpoint,
                 "UNIT_ID": data["unit_id"],
                 "FUNC_NAME": data["func_name"],
                 "func": func,
@@ -441,7 +441,7 @@ def _run_hypothesis_inline(unit_id: str, func: Any, blocks: list[str]) -> tuple[
         return 0, []
 
     namespace = {
-        "load_active": load_active,
+        "load_checkpoint": load_checkpoint,
         "UNIT_ID": unit_id,
         "FUNC_NAME": func.__name__ if hasattr(func, "__name__") else "func",
         "func": func,
@@ -477,10 +477,10 @@ def test_unit(unit_id: str) -> TestResult:
     Returns:
         TestResult
     """
-    from vibesafe.core import vibesafe
+    from vibesafe.core import get_unit
 
     # Get unit metadata
-    unit_meta = vibesafe.get_unit(unit_id)
+    unit_meta = get_unit(unit_id)
     if not unit_meta:
         return TestResult(passed=False, errors=[f"Unit not found: {unit_id}"])
 
@@ -523,10 +523,10 @@ def run_all_tests() -> dict[str, TestResult]:
     Returns:
         Dictionary mapping unit_id to TestResult
     """
-    from vibesafe.core import vibesafe
+    from vibesafe.core import get_registry
 
     results = {}
-    for unit_id in vibesafe.get_registry():
+    for unit_id in get_registry():
         results[unit_id] = test_unit(unit_id)
 
     return results
@@ -535,3 +535,4 @@ def run_all_tests() -> dict[str, TestResult]:
 # Prevent pytest from auto-collecting helper functions
 cast(Any, test_checkpoint).__test__ = False
 cast(Any, test_unit).__test__ = False
+

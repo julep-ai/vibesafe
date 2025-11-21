@@ -60,7 +60,7 @@ class TestTestCheckpoint:
     ):
         """Test checkpoint with no doctests passes."""
 
-        @vibesafe.func
+        @vibesafe
         def no_doctest_func(x: int) -> int:
             """Function without doctests."""
             return x
@@ -79,7 +79,7 @@ class TestTestCheckpoint:
     ):
         """Test checkpoint with passing doctests."""
 
-        @vibesafe.func
+        @vibesafe
         def add_numbers(a: int, b: int) -> int:
             """
             Add two numbers.
@@ -102,7 +102,7 @@ class TestTestCheckpoint:
     def test_checkpoint_gates_failure(self, checkpoint_dir, clear_defless_registry, monkeypatch):
         """Gate failures should surface as test failures."""
 
-        @vibesafe.func
+        @vibesafe
         def gated_func(a: int) -> int:
             """
             Example with doctest.
@@ -150,7 +150,7 @@ def gated_func(a: int) -> int:
 
         config_module._config = test_config
 
-        @vibesafe.func
+        @vibesafe
         def doc_func(msg: str) -> str:
             """Echo.
 
@@ -218,7 +218,7 @@ def doc_func(msg: str) -> str:
         monkeypatch.chdir(temp_dir)
         config_module._config = test_config
 
-        @vibesafe.func
+        @vibesafe
         def sandboxed(msg: str) -> str:
             return VibesafeHandled()
 
@@ -257,7 +257,7 @@ class TestTestUnit:
     def test_unit_not_compiled(self, test_config, temp_dir, monkeypatch, clear_defless_registry):
         """Test testing uncompiled unit returns error."""
 
-        @vibesafe.func
+        @vibesafe
         def uncompiled_func(x: int) -> int:
             """Not compiled."""
             yield VibesafeHandled()

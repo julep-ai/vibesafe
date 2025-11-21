@@ -10,8 +10,8 @@ from typing import Any
 
 from vibesafe import __version__
 from vibesafe.codegen import generate_for_unit
-from vibesafe.core import vibesafe
-from vibesafe.runtime import update_index, write_shim
+from vibesafe.core import get_registry, vibesafe
+from vibesafe.runtime import update_index
 from vibesafe.testing import run_all_tests, test_unit
 
 
@@ -60,7 +60,7 @@ class MCPServer:
 
     def scan(self, params: dict[str, Any]) -> dict[str, Any]:
         """Scan for vibesafe units."""
-        registry = vibesafe.get_registry()
+        registry = get_registry()
 
         units = []
         for unit_id, unit_meta in registry.items():
@@ -90,13 +90,11 @@ class MCPServer:
                 checkpoint_info["spec_hash"],
                 created=checkpoint_info.get("created_at"),
             )
-            shim_path = write_shim(target)
-
+            
             return {
                 "success": True,
                 "spec_hash": checkpoint_info["spec_hash"],
                 "chk_hash": checkpoint_info["chk_hash"],
-                "shim_path": str(shim_path),
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -154,7 +152,7 @@ class MCPServer:
         from vibesafe.config import get_config
 
         config = get_config()
-        registry = vibesafe.get_registry()
+        registry = get_registry()
 
         return {
             "version": __version__,

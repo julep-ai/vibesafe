@@ -100,7 +100,7 @@ class CodeGenerator:
 
     def _compute_spec_hash(self) -> str:
         """Compute spec hash for this unit."""
-        template_id = self.unit_meta.get("template", "function.j2")
+        template_id = self.unit_meta.get("template") or "function.j2"
         provider_model = self.provider_config.model
         dependency_digest = compute_dependency_digest(self.spec["dependencies"])
         provider_params = {
@@ -319,9 +319,9 @@ def generate_for_unit(
     Returns:
         Checkpoint info dictionary
     """
-    from vibesafe.core import vibesafe
+    from vibesafe.core import get_unit
 
-    unit_meta = vibesafe.get_unit(unit_id)
+    unit_meta = get_unit(unit_id)
     if not unit_meta:
         raise ValueError(f"Unit not found: {unit_id}")
 
