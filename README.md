@@ -158,8 +158,8 @@ vibesafe save --target examples.quickstart/greet
 **4. Use it:**
 
 ```python
-# Import from __generated__ shim
-from __generated__.examples.quickstart import greet
+# Import the function directly (decorator handles checkpoint loading)
+from examples.quickstart import greet
 
 print(greet("World"))  # "Hello, World!"
 ```
@@ -169,7 +169,7 @@ print(greet("World"))  # "Hello, World!"
 1. `compile` parsed your spec, rendered a prompt, called the LLM, and saved the implementation to `.vibesafe/checkpoints/examples.quickstart/greet/<hash>/impl.py`
 2. `test` ran the doctests you wrote, plus mypy and ruff checks
 3. `save` wrote the checkpoint hash to `.vibesafe/index.toml`, activating it for runtime use
-4. The `__generated__` shim imports from the active checkpoint transparently
+4. The `@vibesafe.func` decorator loads from the active checkpoint transparently
 
 ---
 
@@ -189,11 +189,11 @@ vibesafe scan
 #   examples.api.routes/sum_endpoint [2 doctests] ✓ checkpoint active
 ```
 
-**Generate import shims:**
+**Generate import shims (deprecated):**
 
 ```bash
 vibesafe scan --write-shims
-# Creates __generated__/ directory with Python modules that route imports to active checkpoints
+# Note: Shims are deprecated and no longer needed for importing generated code
 ```
 
 ### Compiling Implementations
@@ -352,7 +352,7 @@ vibesafe status
 
 | Command | Description | Key Options |
 |---------|-------------|-------------|
-| `vibesafe scan` | List all specs and their status | `--write-shims` |
+| `vibesafe scan` | List all specs and their status | `--write-shims` (deprecated) |
 | `vibesafe compile` | Generate implementations | `--target`, `--force` |
 | `vibesafe test` | Run verification (doctests + gates) | `--target` |
 | `vibesafe save` | Activate checkpoints | `--target`, `--freeze-http-deps` |
@@ -383,7 +383,7 @@ timeout = 60             # Request timeout (seconds)
 checkpoints = ".vibesafe/checkpoints"  # Where implementations are stored
 cache = ".vibesafe/cache"              # LLM response cache (gitignored)
 index = ".vibesafe/index.toml"         # Active checkpoint registry
-generated = "__generated__"            # Import shim directory
+generated = "__generated__"            # Import shim directory (deprecated)
 
 [prompts]
 function = "prompts/function.j2"       # Template for @vibesafe.func
@@ -533,10 +533,10 @@ async def your_endpoint(...) -> ...:
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ Runtime: Import from __generated__/                             │
-│   from __generated__.examples.math import sum_str               │
+│ Runtime: Direct function import                                 │
+│   from examples.math import sum_str                             │
 │                                                                 │
-│ Shim calls: load_active("examples.math/sum_str")               │
+│ Decorator calls: load_checkpoint("examples.math/sum_str")      │
 │   1. Read .vibesafe/index.toml for active hash                  │
 │   2. Load .vibesafe/checkpoints/<unit>/<hash>/impl.py           │
 │   3. In prod mode: verify H_spec matches checkpoint meta        │

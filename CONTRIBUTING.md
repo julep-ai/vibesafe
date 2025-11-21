@@ -8,11 +8,14 @@ Thanks for helping improve Vibesafe! These quick notes cover the essentials for 
 - Install the project with dev tooling: `uv pip install -e ".[dev]"`.
 
 ## Workflow Checklist
-- Run `vibesafe scan` to verify specs register, `vibesafe status` for an overview of active checkpoints, `vibesafe diff --target <unit>` to inspect drift, `vibesafe compile --target <unit>` to regenerate implementations, and `vibesafe test` to re-run doctest-backed and lint/type gates.
+- The `vibesafe` command has a short alias `vibe` for convenience. Run `vibesafe scan` (or `vibe scan`) to verify specs register, `vibesafe status` for an overview of active checkpoints, `vibesafe diff --target <unit>` to inspect drift, `vibesafe compile --target <unit>` to regenerate implementations, and `vibesafe test` to re-run doctest-backed and lint/type gates.
 - Execute `pytest` (or `pytest -m "not slow"` for tight loops) before pushing.
 - Need to freeze dependencies for an HTTP surface? Include `vibesafe save --target <unit> --freeze-http-deps` (or run without `--target` to freeze all) after tests pass.
 - Lint and format with `ruff check src tests examples` and `ruff format src tests examples`.
 - Type-check with `mypy src/vibesafe` and `pyright src/vibesafe`.
+
+## Deprecated Features
+- `--write-shims` flag on `vibesafe scan` is deprecated as of v0.2. Direct imports are now preferred over generated shim files.
 
 ## Pull Requests
 - Keep commits focused; prefer sentence-case summaries.

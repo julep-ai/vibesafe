@@ -286,7 +286,7 @@ class TestVibesafeCore:
         monkeypatch.setattr("vibesafe.runtime.update_index", lambda *a, **k: None)
         # load_checkpoint logic is mocked via _auto_generate_and_load usually, but here we mock lower levels
         # Actually _auto_generate_and_load calls generate_for_unit, update_index, test_unit, load_checkpoint
-        
+
         # We need to mock load_checkpoint to fail first then succeed
         def fake_load_checkpoint(unit_id: str, verify_hash: bool = True, **kwargs):
             if not generate_calls:
@@ -457,7 +457,7 @@ class TestVibesafeCore:
 
         with pytest.raises(RuntimeError) as exc_info:
              cowsayonlyboo("moo")
-        
+
         assert "API key not found" in str(exc_info.value.__cause__)
 
     def test_missing_doctest_hint_in_error(self, clear_defless_registry, monkeypatch):

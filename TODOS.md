@@ -1,5 +1,6 @@
 # Vibesafe TODOs
 
+## Completed (Phase 1)
 - [x] Update SPEC.md Part II CLI section to mention both `vibesafe` and the new `vibe` alias, and audit the doc for other command-name drift before release.
 - [x] Implement the CLI `repl` workflow described in SPEC §14, including regen, tighten, diff, and save actions. *(current implementation covers generate/test/diff/summary; tighten/save remain to be layered on top)*
 - [x] Generate doctest harness files under `tests/defless/` and integrate them into `vibesafe testing` flow per SPEC §12. *(now auto-written during test runs)*
@@ -10,3 +11,11 @@
 - [x] Add `vibe check` command to bundle lint/type/test/drift checks as referenced in SPEC §18.
 - [x] Document shipping strategy for including checkpoint `impl.py` files (SPEC §17) once policy is decided.
 - [x] Review remaining Phase 2 roadmap items in SPEC Appendix A and file granular issues for each milestone. *(tracked in ROADMAP.md)*
+
+## Migration & Documentation (v0.2)
+- [ ] Document migration path from shims to direct imports
+- [ ] Add deprecation warnings to old docs still referencing `__generated__`
+- [ ] Update all examples to use current import patterns
+- [ ] Create troubleshooting guide for users upgrading from v0.1
+- [ ] Update SPEC.md to reflect module-level registry implementation vs. aspirational structure
+- [ ] Add migration section to README with before/after code examples

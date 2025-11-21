@@ -10,7 +10,7 @@ from collections.abc import Callable
 from typing import Any, ParamSpec, TypeVar, cast
 
 from vibesafe.ast_parser import extract_spec
-from vibesafe.config import get_config
+from vibesafe.config import get_config, resolve_template_id
 from vibesafe.exceptions import VibesafeMissingDoctest
 
 P = ParamSpec("P")
@@ -183,7 +183,7 @@ def _handle_fallback_sync(func, args, kwargs, unit_id, spec_meta, error):
 
 def _check_fallback_result(result, unit_id, spec_meta, error):
     """Verify the fallback result is VibesafeHandled and raise appropriate error."""
-    
+
     # Check if it's a generator
     if inspect.isgenerator(result):
         marker_seen = False
@@ -198,7 +198,7 @@ def _check_fallback_result(result, unit_id, spec_meta, error):
 
         if marker_seen:
             _raise_uncompiled(unit_id, spec_meta, error)
-        
+
         _raise_uncompiled(unit_id, spec_meta, error, "Specs must yield `VibesafeHandled()`")
 
     if isinstance(result, VibesafeHandled) or result is Ellipsis or result is None:
@@ -219,7 +219,7 @@ def _raise_uncompiled(unit_id, spec_meta, error, extra_hint=None):
     error_message = str(error) if error else None
     config_env = get_config().project.env
     doctest_notice = doctest_hint
-    
+
     if doctest_hint and config_env != "prod":
         warnings.warn(doctest_hint, RuntimeWarning, stacklevel=3)
 
@@ -231,7 +231,7 @@ def _raise_uncompiled(unit_id, spec_meta, error, extra_hint=None):
     merged = ". ".join(h for h in hints if h)
     if merged:
         base_message = f"{base_message} {merged}"
-    
+
     raise RuntimeError(base_message) from error
 
 
@@ -267,13 +267,11 @@ def _compute_spec_hash(unit_id: str, spec_meta: dict[str, Any]) -> str:
     if unit_meta is None:
         raise RuntimeError(f"Unit not registered: {unit_id}")
 
+    config = get_config()
     provider_name = unit_meta.get("provider") or "default"
-    provider_config = get_config().get_provider(provider_name)
-    
-    # Default template logic will be handled by codegen/inference later
-    # For now, use what's in registry or default
-    template_id = unit_meta.get("template") or "function.j2"
-    
+    provider_config = config.get_provider(provider_name)
+    template_id = resolve_template_id(unit_meta, config, spec_meta.get("type"))
+
     dependency_digest = compute_dependency_digest(spec_meta.get("dependencies", {}))
     provider_params = {
         "temperature": provider_config.temperature,
@@ -342,7 +340,7 @@ def _auto_generate_and_load(unit_id: str, spec_meta: dict[str, Any]) -> Callable
             checkpoint_info["spec_hash"],
             created=checkpoint_info.get("created_at"),
         )
-        
+
         retry_result = test_unit(unit_id)
         if retry_result:
             return load_checkpoint(unit_id)

@@ -76,6 +76,7 @@ class TestPromptsConfig:
         config = PromptsConfig()
         assert config.function == "prompts/function.j2"
         assert config.http == "prompts/http_endpoint.j2"
+        assert config.cli == "prompts/cli_command.j2"
 
 
 class TestProjectConfig:

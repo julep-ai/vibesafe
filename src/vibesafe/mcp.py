@@ -10,7 +10,7 @@ from typing import Any
 
 from vibesafe import __version__
 from vibesafe.codegen import generate_for_unit
-from vibesafe.core import get_registry, vibesafe
+from vibesafe.core import get_registry
 from vibesafe.runtime import update_index
 from vibesafe.testing import run_all_tests, test_unit
 
@@ -90,7 +90,7 @@ class MCPServer:
                 checkpoint_info["spec_hash"],
                 created=checkpoint_info.get("created_at"),
             )
-            
+
             return {
                 "success": True,
                 "spec_hash": checkpoint_info["spec_hash"],

@@ -42,14 +42,14 @@ def compute_spec_hash(
         Hex digest of spec hash
     """
     components = [
-        signature,
+        signature or "",
         normalize_docstring(docstring),
-        body_before_handled.strip(),
+        (body_before_handled or "").strip(),
         __version__,
-        template_id,
-        provider_model,
+        template_id or "",
+        provider_model or "",
         _serialize_provider_params(provider_params),
-        dependency_digest,
+        dependency_digest or "",
     ]
 
     combined = "\n---\n".join(components)

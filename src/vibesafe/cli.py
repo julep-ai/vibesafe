@@ -12,7 +12,7 @@ from rich.table import Table
 from vibesafe import __version__
 from vibesafe.ast_parser import extract_spec
 from vibesafe.codegen import generate_for_unit
-from vibesafe.config import get_config
+from vibesafe.config import get_config, resolve_template_id
 from vibesafe.core import get_registry, get_unit
 from vibesafe.hashing import compute_dependency_digest, compute_spec_hash
 from vibesafe.runtime import update_index
@@ -71,7 +71,7 @@ def scan(write_shims: bool) -> None:
             active_units = {uid: data.get("active", "") for uid, data in index.items()}
 
     for unit_id, unit_meta in sorted(registry.items()):
-        unit_type = unit_meta.get("type", "function")
+        unit_type = "http" if "method" in unit_meta else "function"
 
         # Count doctests
         from vibesafe.ast_parser import extract_spec
@@ -277,7 +277,7 @@ def status() -> None:
             "seed": provider_cfg.seed,
             "timeout": provider_cfg.timeout,
         }
-        template_id = unit_meta.get("template", "prompts/function.j2")
+        template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
             docstring=spec["docstring"],
@@ -351,7 +351,7 @@ def diff(target: str | None) -> None:
             "seed": provider_cfg.seed,
             "timeout": provider_cfg.timeout,
         }
-        template_id = unit_meta.get("template", "prompts/function.j2")
+        template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
             docstring=spec["docstring"],
@@ -483,7 +483,7 @@ def repl(target: str | None) -> None:
             "seed": provider_cfg.seed,
             "timeout": provider_cfg.timeout,
         }
-        template_id = unit_meta.get("template", "prompts/function.j2")
+        template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
             docstring=spec["docstring"],
@@ -583,9 +583,15 @@ def repl(target: str | None) -> None:
     _show_summary()
     _print_help()
 
+    prompt = "\n[bold cyan]repl>[/bold cyan] "
+    plain_prompt = "\nrepl> "
+
     while True:
         try:
-            raw = console.input("\n[bold cyan]repl>[/bold cyan] ")
+            if isinstance(console, Console):
+                raw = console.input(prompt)
+            else:
+                raw = input(plain_prompt)
         except (KeyboardInterrupt, EOFError):
             console.print("\n[bold]Exiting REPL.[/bold]")
             break
@@ -720,7 +726,7 @@ def _import_project_modules() -> None:
         sys.path.insert(0, str(cwd))
 
     # Try common patterns
-    patterns = ["app/**/*.py", "src/**/*.py", "*.py"]
+    patterns = ["app/**/*.py", "src/**/*.py", "examples/**/*.py", "*.py"]
 
     for pattern in patterns:
         for py_file in cwd.glob(pattern):
@@ -791,7 +797,7 @@ def _detect_drift() -> tuple[int, bool]:
             "seed": provider_cfg.seed,
             "timeout": provider_cfg.timeout,
         }
-        template_id = unit_meta.get("template", "prompts/function.j2")
+        template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
             docstring=spec["docstring"],
@@ -809,4 +815,3 @@ def _detect_drift() -> tuple[int, bool]:
             drift_count += 1
 
     return drift_count, False
-

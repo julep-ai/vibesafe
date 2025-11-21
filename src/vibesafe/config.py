@@ -41,6 +41,7 @@ class PromptsConfig(BaseModel):
 
     function: str = "prompts/function.j2"
     http: str = "prompts/http_endpoint.j2"
+    cli: str = "prompts/cli_command.j2"
 
 
 class ProjectConfig(BaseModel):
@@ -191,3 +192,30 @@ def get_config(reload: bool = False) -> VibesafeConfig:
     if _config is None or reload:
         _config = VibesafeConfig.load()
     return _config
+
+
+def resolve_template_id(
+    unit_meta: dict[str, Any],
+    config: VibesafeConfig | None = None,
+    spec_type: str | None = None,
+) -> str:
+    """
+    Determine the template identifier for a unit, respecting config defaults.
+
+    Prefers an explicit template on the unit. Falls back to the configured
+    function/http/cli template based on the unit's declared kind/type or
+    inferred spec_type.
+    """
+    cfg = config or get_config()
+
+    template = unit_meta.get("template")
+    if template:
+        return template
+
+    unit_kind = unit_meta.get("kind") or unit_meta.get("type") or spec_type
+    if unit_kind == "http":
+        return cfg.prompts.http
+    if unit_kind == "cli":
+        return cfg.prompts.cli
+
+    return cfg.prompts.function

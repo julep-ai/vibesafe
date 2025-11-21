@@ -60,6 +60,7 @@ generated = "__generated__"
 [prompts]
 function = "prompts/function.j2"
 http = "prompts/http_endpoint.j2"
+cli = "prompts/cli_command.j2"
 
 [sandbox]
 enabled = false

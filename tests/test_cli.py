@@ -2,11 +2,12 @@
 Tests for vibesafe.cli module.
 """
 
-import pytest
-from click.testing import CliRunner
 from unittest.mock import MagicMock
 
-from vibesafe import VibesafeHandled, get_registry, get_unit, vibesafe
+import pytest
+from click.testing import CliRunner
+
+from vibesafe import VibesafeHandled, get_unit, vibesafe
 from vibesafe.cli import check, compile, diff, main, repl, save, scan, status, test
 
 
@@ -28,7 +29,7 @@ class TestCLI:
     def assert_console_output(self, mock_console, text):
         """Assert that the text was printed to the console."""
         output = "\n".join(
-            str(call.args[0]) if call.args else "" 
+            str(call.args[0]) if call.args else ""
             for call in mock_console.print.call_args_list
         )
         assert text in output
@@ -73,7 +74,7 @@ class TestCLI:
 
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(scan)
-        
+
         if result.exit_code != 0:
             with open("/home/diwank/github.com/julep-ai/vibesafe/debug_cli.txt", "w") as f:
                 f.write(f"Output: {result.output}\n")
@@ -268,7 +269,7 @@ class TestCLI:
         monkeypatch.setattr("vibesafe.cli.get_unit", lambda _: unit_meta)
 
         result = runner.invoke(repl, ["--target", unit_id], input="q\n")
-        
+
         if result.exit_code != 0:
             with open("/home/diwank/github.com/julep-ai/vibesafe/debug_cli.txt", "w") as f:
                 f.write(f"Output: {result.output}\n")
