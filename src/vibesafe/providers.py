@@ -133,7 +133,7 @@ class CachedProvider:
     """Wrapper that caches provider responses."""
 
     def __init__(self, provider: Provider, cache_dir: Path):
-        self.provider = provider
+        self.provider: Provider = provider
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.last_metadata = CompletionMetadata()
