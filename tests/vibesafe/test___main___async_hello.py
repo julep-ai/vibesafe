@@ -1,7 +1,6 @@
 """Auto-generated doctest harness for __main__/async_hello."""
 
 import doctest
-
 import warnings
 
 import pytest

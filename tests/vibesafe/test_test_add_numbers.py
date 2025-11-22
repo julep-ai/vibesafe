@@ -1,7 +1,6 @@
 """Auto-generated doctest harness for test/add_numbers."""
 
 import doctest
-
 import warnings
 
 import pytest

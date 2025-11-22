@@ -1,7 +1,6 @@
 """Auto-generated doctest harness for test/gated_func."""
 
 import doctest
-
 import warnings
 
 import pytest

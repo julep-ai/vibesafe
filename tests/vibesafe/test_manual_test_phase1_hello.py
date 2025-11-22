@@ -1,7 +1,6 @@
 """Auto-generated doctest harness for manual_test_phase1/hello."""
 
 import doctest
-
 import warnings
 
 import pytest
