@@ -1,15 +1,10 @@
 """Auto-generated doctest harness for test/gated_func."""
 
 import doctest
-import warnings
-
-import pytest
-
-from vibesafe.exceptions import VibesafeCheckpointMissing
 from vibesafe.runtime import load_checkpoint
 
-UNIT_ID = "test/gated_func"
-FUNC_NAME = "gated_func"
+UNIT_ID = 'test/gated_func'
+FUNC_NAME = 'gated_func'
 DOCSTRING = "Example with doctest.\n\n>>> gated_func(1)\n1"
 PROPERTY_SRC = ""
 
@@ -50,15 +45,7 @@ def _run_doctests(func) -> None:
         raise AssertionError(f"{failures} doctest(s) failed for {UNIT_ID}")
 
 
-def _load_or_skip():
-    try:
-        return load_checkpoint(UNIT_ID)
-    except VibesafeCheckpointMissing as exc:
-        warnings.warn(f"Skipping {UNIT_ID}: {exc}", RuntimeWarning, stacklevel=2)
-        pytest.skip(f"Checkpoint missing for {UNIT_ID}: {exc}")
-
-
 def test_doctests() -> None:
-    func = _load_or_skip()
+    func = load_checkpoint(UNIT_ID)
     _run_doctests(func)
     _exec_properties(func)

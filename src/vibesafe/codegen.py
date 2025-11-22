@@ -85,7 +85,10 @@ class CodeGenerator:
         # Render prompt
         prompt = self._render_prompt()
         if feedback:
-            prompt = f"{prompt}\n\n# Feedback from previous attempt\n{feedback}\n"
+            prompt = (
+                f"{prompt}\n\n---\nPrevious attempt failed with:\n{feedback}\n"
+                "Please fix the issues above and output only the corrected implementation."
+            )
         prompt_hash = compute_prompt_hash(prompt)
 
         # Call LLM
@@ -109,11 +112,12 @@ class CodeGenerator:
         )
         provider_model = self.provider_config.model
         dependency_digest = compute_dependency_digest(self.spec["dependencies"])
-        provider_params = {
-            "temperature": self.provider_config.temperature,
+        provider_params: dict[str, str | int | float] = {
             "seed": self.provider_config.seed,
             "timeout": self.provider_config.timeout,
         }
+        if self.provider_config.reasoning_effort:
+            provider_params["reasoning_effort"] = self.provider_config.reasoning_effort
 
         return compute_spec_hash(
             signature=self.spec["signature"],
@@ -349,6 +353,12 @@ class CodeGenerator:
         signature_text = self.spec["signature"]
         docstring_text = self.spec["docstring"] or ""
         body_before = self.spec["body_before_handled"] or ""
+        reasoning_line = ""
+        if self.provider_config.reasoning_effort:
+            reasoning_line = (
+                f'reasoning_effort = "{self.provider_config.reasoning_effort}"\n            '
+            )
+
         meta_content = textwrap.dedent(
             f"""\
             # Vibesafe checkpoint metadata
@@ -361,8 +371,7 @@ class CodeGenerator:
             vibesafe_version = "{__version__}"
             provider = "{self.provider_config.kind}:{self.provider_config.model}"
             template = "{template_id}"
-            provider_temperature = {self.provider_config.temperature}
-            provider_seed = {self.provider_config.seed}
+            {reasoning_line}provider_seed = {self.provider_config.seed}
             provider_timeout = {self.provider_config.timeout}
 
             [hash_inputs]

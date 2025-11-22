@@ -54,7 +54,6 @@ def multiply(a: int, b: int) -> int:
         assert checkpoint_info["impl_path"].exists()
         meta_text = checkpoint_info["meta_path"].read_text()
         assert "spec_sha" in meta_text
-        assert "provider_temperature" in meta_text
         assert "signature_sha" in meta_text
 
         # Step 3: Update index

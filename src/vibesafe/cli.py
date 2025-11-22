@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import cast
 
@@ -81,11 +82,7 @@ def scan() -> None:
         provider_name = unit_meta.get("provider") or "default"
         provider_cfg = config.get_provider(provider_name)
         dependency_digest = compute_dependency_digest(spec["dependencies"])
-        provider_params = {
-            "temperature": provider_cfg.temperature,
-            "seed": provider_cfg.seed,
-            "timeout": provider_cfg.timeout,
-        }
+        provider_params = _build_provider_params(provider_cfg)
         template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
@@ -116,7 +113,14 @@ def scan() -> None:
 @main.command()
 @click.option("--target", help="Specific unit ID or module to compile")
 @click.option("--force", is_flag=True, help="Force recompilation even if checkpoint exists")
-def compile(target: str | None, force: bool) -> None:
+@click.option(
+    "--workers",
+    type=click.IntRange(1, None),
+    default=None,
+    show_default=False,
+    help="Number of parallel workers (default: CPU cores - 2, minimum 1).",
+)
+def compile(target: str | None, force: bool, workers: int | None) -> None:
     """
     Generate code for vibesafe units.
 
@@ -144,42 +148,74 @@ def compile(target: str | None, force: bool) -> None:
     else:
         units_to_compile = list(registry.keys())
 
-    console.print(f"[bold]Compiling {len(units_to_compile)} unit(s)...[/bold]\n")
+    auto_workers = max(((os.cpu_count() or 4) - 2), 1)
+    worker_count = workers or auto_workers
+
+    console.print(
+        f"[bold]Compiling {len(units_to_compile)} unit(s) with {worker_count} worker(s)...[/bold]\n"
+    )
 
     had_failures = False
 
-    for unit_id in units_to_compile:
-        console.print(f"[cyan]→ {unit_id}[/cyan]")
+    from vibesafe.testing import test_checkpoint
 
+    registry_snapshot = registry  # local ref for worker closure
+
+    def _compile_unit(unit_id: str) -> tuple[str, dict | None, object | None, list[str]]:
+        """Return (unit_id, checkpoint_info, test_result, errors)."""
         try:
             checkpoint_info = generate_for_unit(unit_id, force=force)
-            console.print(f"  ✓ Generated checkpoint: {checkpoint_info['spec_hash'][:8]}")
+            unit_meta = registry_snapshot[unit_id]
+            test_result = test_checkpoint(checkpoint_info["checkpoint_dir"], unit_meta)
+            errors: list[str] = []
+            if not test_result.passed:
+                errors = test_result.errors
+            return unit_id, checkpoint_info, test_result, errors
+        except Exception as exc:  # pragma: no cover - provider/environment failures
+            return unit_id, None, None, [str(exc)]
 
-            update_index(
-                unit_id,
-                checkpoint_info["spec_hash"],
-                created=checkpoint_info.get("created_at"),
-            )
-            console.print("  ✓ Updated index")
+    results: list[tuple[str, dict | None, object | None, list[str]]] = []
 
-            test_result = test_unit(unit_id)
-            if test_result:
-                console.print(f"  ✓ Tests passed ({test_result.total} total)")
-            else:
-                had_failures = True
-                console.print(
-                    f"  [red]✗ Tests failed ({test_result.failures}/{test_result.total})[/red]"
-                )
-                for error in test_result.errors:
-                    console.print(f"    • {error}")
+    if worker_count == 1 or len(units_to_compile) == 1:
+        for uid in units_to_compile:
+            results.append(_compile_unit(uid))
+    else:
+        max_workers = min(worker_count, len(units_to_compile))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {executor.submit(_compile_unit, uid): uid for uid in units_to_compile}
+            for future in as_completed(future_map):
+                results.append(future.result())
 
-        except Exception as e:
+    # Process results in submission order to keep output deterministic for the user.
+    order = {uid: idx for idx, uid in enumerate(units_to_compile)}
+    results.sort(key=lambda r: order[r[0]])
+
+    for unit_id, checkpoint_info, test_result, errors in results:
+        console.print(f"[cyan]→ {unit_id}[/cyan]")
+
+        if checkpoint_info is None:
             had_failures = True
-            console.print(f"  [red]✗ Error: {e}[/red]")
-            if "--verbose" in sys.argv:
-                import traceback
+            console.print(f"  [red]✗ Error:[/red] {errors[0] if errors else 'unknown error'}")
+            continue
 
-                traceback.print_exc()
+        console.print(f"  ✓ Generated checkpoint: {checkpoint_info['spec_hash'][:8]}")
+
+        update_index(
+            unit_id,
+            checkpoint_info["spec_hash"],
+            created=checkpoint_info.get("created_at"),
+        )
+        console.print("  ✓ Updated index")
+
+        if test_result and getattr(test_result, "passed", False):
+            console.print(f"  ✓ Tests passed ({getattr(test_result, 'total', '?')} total)")
+        else:
+            had_failures = True
+            total = getattr(test_result, "total", "?") if test_result else "?"
+            failures = getattr(test_result, "failures", "?") if test_result else "?"
+            console.print(f"  [red]✗ Tests failed ({failures}/{total})[/red]")
+            for err in errors:
+                console.print(f"    • {err}")
 
     if had_failures:
         console.print("\n[bold red]Compilation finished with errors.[/bold red]")
@@ -311,11 +347,7 @@ def status() -> None:
         provider_cfg = config.get_provider(provider_name)
         spec = extract_spec(unit_meta["func"])
         dependency_digest = compute_dependency_digest(spec["dependencies"])
-        provider_params = {
-            "temperature": provider_cfg.temperature,
-            "seed": provider_cfg.seed,
-            "timeout": provider_cfg.timeout,
-        }
+        provider_params = _build_provider_params(provider_cfg)
         template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
@@ -385,11 +417,7 @@ def diff(target: str | None) -> None:
         provider_cfg = config.get_provider(provider_name)
         spec = extract_spec(unit_meta["func"])
         dependency_digest = compute_dependency_digest(spec["dependencies"])
-        provider_params = {
-            "temperature": provider_cfg.temperature,
-            "seed": provider_cfg.seed,
-            "timeout": provider_cfg.timeout,
-        }
+        provider_params = _build_provider_params(provider_cfg)
         template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
@@ -591,11 +619,7 @@ def repl(target: str | None) -> None:
         provider_cfg = config.get_provider(provider_name)
         spec = extract_spec(unit_meta["func"])
         dependency_digest = compute_dependency_digest(spec["dependencies"])
-        provider_params = {
-            "temperature": provider_cfg.temperature,
-            "seed": provider_cfg.seed,
-            "timeout": provider_cfg.timeout,
-        }
+        provider_params = _build_provider_params(provider_cfg)
         template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
@@ -828,31 +852,46 @@ def _import_project_modules() -> None:
 
     This is a simple implementation that imports from current directory.
     """
-    # Try to import common app directories
     cwd = Path.cwd()
 
-    # Add cwd to path if not already there
     if str(cwd) not in sys.path:
         sys.path.insert(0, str(cwd))
 
-    # Try common patterns
-    patterns = ["app/**/*.py", "src/**/*.py", "examples/**/*.py", "*.py"]
+    ignore_dirnames = {
+        ".git",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".cache",
+        "node_modules",
+        "dist",
+        "build",
+    }
 
-    for pattern in patterns:
-        for py_file in cwd.glob(pattern):
-            if py_file.name.startswith("_") or "__generated__" in str(py_file):
-                continue
+    def _should_skip(path: Path) -> bool:
+        return any(part in ignore_dirnames or part.startswith(".") for part in path.parts)
 
-            # Convert path to module name
-            rel_path = py_file.relative_to(cwd)
-            module_parts = list(rel_path.with_suffix("").parts)
-            module_name = ".".join(module_parts)
+    for py_file in cwd.rglob("*.py"):
+        if _should_skip(py_file) or "__generated__" in str(py_file):
+            continue
 
-            try:
-                __import__(module_name)
-            except Exception:
-                # Skip files that can't be imported
-                pass
+        rel_path = py_file.relative_to(cwd)
+        module_parts = rel_path.with_suffix("").parts
+
+        # Skip modules with invalid python identifiers in path
+        if any("-" in part for part in module_parts):
+            continue
+
+        module_name = ".".join(module_parts)
+
+        try:
+            __import__(module_name)
+        except Exception:
+            # Best-effort import; failures are ignored to keep scan resilient.
+            continue
 
 
 def _run_command(cmd: list[str]) -> bool:
@@ -873,6 +912,18 @@ def _run_command(cmd: list[str]) -> bool:
         detail = f" ({output})" if output else ""
         console.print(f"  [red]✗ Command failed ({exc.returncode})[/red]{detail}")
     return False
+
+
+def _build_provider_params(provider_cfg) -> dict[str, str | int | float]:
+    """Return provider parameters (temperature is intentionally omitted)."""
+
+    params: dict[str, str | int | float] = {
+        "seed": provider_cfg.seed,
+        "timeout": provider_cfg.timeout,
+    }
+    if provider_cfg.reasoning_effort:
+        params["reasoning_effort"] = provider_cfg.reasoning_effort
+    return params
 
 
 def _detect_drift() -> tuple[int, bool]:
@@ -902,11 +953,7 @@ def _detect_drift() -> tuple[int, bool]:
         provider_cfg = config.get_provider(provider_name)
         spec = extract_spec(unit_meta["func"])
         dependency_digest = compute_dependency_digest(spec["dependencies"])
-        provider_params = {
-            "temperature": provider_cfg.temperature,
-            "seed": provider_cfg.seed,
-            "timeout": provider_cfg.timeout,
-        }
+        provider_params = _build_provider_params(provider_cfg)
         template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],

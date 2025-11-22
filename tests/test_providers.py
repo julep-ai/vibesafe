@@ -44,7 +44,7 @@ class TestOpenAICompatibleProvider:
 
     def test_complete_calls_with_correct_params(self, mocker):
         """Test that complete calls API with correct parameters."""
-        config = ProviderConfig(model="gpt-4", temperature=0.5, seed=100)
+        config = ProviderConfig(model="gpt-4", seed=100)
 
         mock_client = mocker.MagicMock()
         mock_response = mocker.MagicMock()
@@ -59,8 +59,25 @@ class TestOpenAICompatibleProvider:
 
         call_args = mock_client.chat.completions.create.call_args
         assert call_args[1]["model"] == "gpt-4"
-        assert call_args[1]["temperature"] == 0.5
         assert call_args[1]["seed"] == 42
+
+    def test_complete_has_no_temperature_param(self, mocker):
+        """Provider should omit temperature entirely."""
+        config = ProviderConfig(model="gpt-4", seed=100)
+
+        mock_client = mocker.MagicMock()
+        mock_response = mocker.MagicMock()
+        mock_response.choices = [mocker.MagicMock()]
+        mock_response.choices[0].message.content = "result"
+        mock_client.chat.completions.create.return_value = mock_response
+
+        provider = OpenAICompatibleProvider(config, "test-key")
+        provider.client = mock_client
+
+        provider.complete(prompt="Test", seed=9)
+
+        call_args = mock_client.chat.completions.create.call_args
+        assert "temperature" not in call_args[1]
 
 
 class TestCachedProvider:

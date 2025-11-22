@@ -105,6 +105,35 @@ class TestCLI:
 
         assert result.exit_code == 0
 
+    def test_scan_discovers_packages_outside_src(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
+        """Scan should find units in arbitrary packages (e.g., playground apps)."""
+
+        pkg = temp_dir / "calculator"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "engine.py").write_text(
+            '''from vibesafe import VibeCoded, vibesafe
+
+
+@vibesafe
+def add(x: int, y: int) -> int:
+    """Add two numbers.
+
+    >>> add(1, 2)
+    3
+    """
+    raise VibeCoded()
+'''
+        )
+
+        monkeypatch.chdir(temp_dir)
+        result = runner.invoke(scan)
+
+        assert result.exit_code == 0
+        self.assert_console_output(mock_console, "Total units:")
+
     def test_compile_no_units(
         self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
     ):
@@ -119,6 +148,60 @@ class TestCLI:
         result = runner.invoke(compile, ["--help"])
         assert result.exit_code == 0
         assert "compile" in result.output.lower()
+        assert "CPU cores - 2" in result.output
+
+    def test_compile_workers_parallel(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
+        """Compile should accept workers>1 and still succeed."""
+
+        # Fake registry with two units
+        def dummy():  # pragma: no cover - used only as marker
+            return None
+
+        registry = {
+            "unit.a": {"func": dummy, "type": "function"},
+            "unit.b": {"func": dummy, "type": "function"},
+        }
+
+        compiled: list[str] = []
+        indexed: list[str] = []
+
+        def fake_generate(unit_id: str, force: bool, **kwargs):
+            compiled.append(unit_id)
+            chk_dir = temp_dir / unit_id.replace(".", "/") / "hash1234567890abcd"
+            chk_dir.mkdir(parents=True, exist_ok=True)
+            (chk_dir / "impl.py").write_text("def f():\n    return 1\n")
+            return {
+                "spec_hash": "hash1234",
+                "checkpoint_dir": chk_dir,
+                "created_at": "now",
+            }
+
+        def fake_test_checkpoint(chk_dir, unit_meta):
+            class Result:
+                passed = True
+                total = 1
+                failures = 0
+                errors: list[str] = []
+
+            return Result()
+
+        def fake_update_index(unit_id, spec_hash, created=None):
+            indexed.append(unit_id)
+
+        monkeypatch.chdir(temp_dir)
+        monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
+        monkeypatch.setattr("vibesafe.cli.get_registry", lambda: registry)
+        monkeypatch.setattr("vibesafe.cli.generate_for_unit", fake_generate)
+        monkeypatch.setattr("vibesafe.testing.test_checkpoint", fake_test_checkpoint)
+        monkeypatch.setattr("vibesafe.cli.update_index", fake_update_index)
+
+        result = runner.invoke(compile, ["--workers", "2"])
+
+        assert result.exit_code == 0
+        assert set(compiled) == {"unit.a", "unit.b"}
+        assert set(indexed) == {"unit.a", "unit.b"}
 
     def test_test_help(self, runner):
         """Test test command help."""

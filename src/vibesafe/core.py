@@ -281,8 +281,8 @@ def _compute_spec_hash(unit_id: str, spec_meta: dict[str, Any]) -> str:
     template_id = resolve_template_id(unit_meta, config, spec_meta.get("type"))
 
     dependency_digest = compute_dependency_digest(spec_meta.get("dependencies", {}))
-    provider_params = {
-        "temperature": provider_config.temperature,
+
+    provider_params: dict[str, str | int | float] = {
         "seed": provider_config.seed,
         "timeout": provider_config.timeout,
     }
@@ -369,22 +369,23 @@ def _auto_generate_and_load(unit_id: str, spec_meta: dict[str, Any]) -> Callable
         return load_checkpoint(unit_id)
 
     errors = test_result.errors or []
+    feedback = "\n".join(errors)
 
-    if _in_interactive_session() and errors:
-        feedback = "\n".join(errors)
-        checkpoint_info = _generate(force=True, feedback=feedback)
-        update_index(
-            unit_id,
-            checkpoint_info["spec_hash"],
-            created=checkpoint_info.get("created_at"),
-        )
+    # Always attempt one auto-repair regeneration with feedback from failing tests.
+    checkpoint_info = _generate(force=True, feedback=feedback)
+    update_index(
+        unit_id,
+        checkpoint_info["spec_hash"],
+        created=checkpoint_info.get("created_at"),
+    )
 
-        retry_result = _run_tests(unit_id)
-        if retry_result:
-            return load_checkpoint(unit_id)
-        errors = retry_result.errors or errors
+    retry_result = _run_tests(unit_id)
+    if retry_result:
+        return load_checkpoint(unit_id)
 
-    merged_errors = "; ".join(errors) if errors else "tests failed"
+    retry_errors = retry_result.errors or errors
+    first_error = retry_errors[0] if retry_errors else "tests failed"
     raise RuntimeError(
-        f"Generated implementation for {unit_id} failed verification: {merged_errors}"
+        "Generated implementation for "
+        f"{unit_id} failed verification after auto-repair. Example failure:\n{first_error}"
     )

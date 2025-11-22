@@ -1,6 +1,6 @@
 [project]
 name = "vibesafe"
-version = "0.2.0-pre1"
+version = "0.2.0rc2"
 description = "Vibe safely"
 readme = "README.md"
 authors = [
@@ -24,15 +24,15 @@ dev = [
     "ty>=0.0.1a25",
     "mcp-use",
     "pytest>=8.0.0",
-    "pytest-xdist>=3.5.0",  # Parallel test execution
-    "pytest-cov>=5.0.0",     # Coverage reporting
-    "pytest-mock>=3.14.0",   # Mocking support
+    "pytest-xdist>=3.5.0", # Parallel test execution
+    "pytest-cov>=5.0.0", # Coverage reporting
+    "pytest-mock>=3.14.0", # Mocking support
     "pytest-asyncio>=0.23.0", # Async test support
-    "pytest-timeout>=2.3.0",  # Test timeouts
+    "pytest-timeout>=2.3.0", # Test timeouts
     "mypy>=1.11.0",
     "ruff>=0.6.0",
     "pyright>=1.1.0",
-    "anyio>=4.0.0",          # For async examples
+    "anyio>=4.0.0", # For async examples
     "hypothesis>=6.100.0",
 ]
 

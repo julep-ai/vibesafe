@@ -161,14 +161,18 @@ def _run_doctests(func: Any, docstring: str, examples: list[doctest.Example]) ->
         docstring=docstring,
     )
 
-    # Run tests
-    failures, total = runner.run(dt, clear_globs=False)
+    # Run tests with captured output for better feedback
+    from io import StringIO
+
+    output = StringIO()
+    failures, total = runner.run(dt, clear_globs=False, out=output.write)
 
     # Collect errors
     errors = []
     if failures > 0:
-        # DocTestRunner prints to stdout, capture would require redirecting
-        errors.append(f"{failures} doctest(s) failed")
+        detail = output.getvalue().strip()
+        summary = f"{failures} doctest(s) failed"
+        errors.append(f"{summary}: {detail}")
 
     return TestResult(passed=(failures == 0), failures=failures, total=total, errors=errors)
 

@@ -53,13 +53,16 @@ class OpenAICompatibleProvider:
         Returns:
             Generated text
         """
-        response = self.client.chat.completions.create(
-            model=self.config.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=self.config.temperature,
-            seed=seed,
-            **kwargs,  # type: ignore
-        )
+        params: dict[str, str | int | float | list[dict[str, str]] | None] = {
+            "model": self.config.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "seed": seed,
+            **kwargs,  # type: ignore[arg-type]
+        }
+        if self.config.reasoning_effort:
+            params["reasoning_effort"] = self.config.reasoning_effort
+
+        response = self.client.chat.completions.create(**params)
 
         content = response.choices[0].message.content
         return content or ""
@@ -72,6 +75,18 @@ class CachedProvider:
         self.provider = provider
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _compute_cache_key(
+        self, prompt: str, seed: int, kwargs: dict[str, str | int | float]
+    ) -> str:
+        """Compute cache key from inputs."""
+        spec_hash = kwargs.pop("spec_hash", None)
+        if spec_hash:
+            key_data = f"{spec_hash}\n{seed}\n{json.dumps(kwargs, sort_keys=True)}"
+        else:
+            prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+            key_data = f"{prompt_hash}\n{seed}\n{json.dumps(kwargs, sort_keys=True)}"
+        return hashlib.sha256(key_data.encode()).hexdigest()[:16]
 
     def complete(self, *, prompt: str, seed: int, **kwargs: str | int | float) -> str:
         """
@@ -112,18 +127,6 @@ class CachedProvider:
             )
 
         return completion
-
-    def _compute_cache_key(
-        self, prompt: str, seed: int, kwargs: dict[str, str | int | float]
-    ) -> str:
-        """Compute cache key from inputs."""
-        spec_hash = kwargs.pop("spec_hash", None)
-        if spec_hash:
-            key_data = f"{spec_hash}\n{seed}\n{json.dumps(kwargs, sort_keys=True)}"
-        else:
-            prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
-            key_data = f"{prompt_hash}\n{seed}\n{json.dumps(kwargs, sort_keys=True)}"
-        return hashlib.sha256(key_data.encode()).hexdigest()[:16]
 
 
 def get_provider(provider_name: str = "default", use_cache: bool = True) -> Provider:
