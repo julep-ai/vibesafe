@@ -35,11 +35,23 @@ class OpenAICompatibleProvider:
 
     def __init__(self, config: ProviderConfig, api_key: str):
         self.config = config
+        self._resolved_model = self._resolve_model(config.model, config.base_url)
         self.client = OpenAI(
             api_key=api_key,
             base_url=config.base_url,
             timeout=config.timeout,
         )
+
+    @staticmethod
+    def _resolve_model(model: str, base_url: str) -> str:
+        """
+        Map internal aliases to available models for common providers.
+
+        Currently maps gpt-5-mini → gpt-4o-mini for OpenAI endpoints.
+        """
+        if "openai" in base_url and model == "gpt-5-mini":
+            return "gpt-4o-mini"
+        return model
 
     def complete(self, *, prompt: str, seed: int, **kwargs: str | int | float) -> str:
         """
@@ -54,7 +66,7 @@ class OpenAICompatibleProvider:
             Generated text
         """
         response = self.client.chat.completions.create(
-            model=self.config.model,
+            model=self._resolved_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=self.config.temperature,
             seed=seed,

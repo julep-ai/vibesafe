@@ -88,6 +88,14 @@ jobs:
           uv venv
           uv pip install -e . --group dev
 
+      - name: Generate checkpoints (examples/manual) [3.12 only]
+        if: matrix.python-version == '3.12'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          source .venv/bin/activate
+          vibesafe compile
+
       - name: Run tests
         run: |
           source .venv/bin/activate
