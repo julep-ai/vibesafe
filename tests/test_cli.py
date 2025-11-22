@@ -392,15 +392,29 @@ class TestCLI:
                 return "/usr/bin/claude"
             return None
 
-        def fake_run(cmd, check):
+        def fake_run(cmd, check=False, capture_output=False, text=False):
             calls.append(cmd)
-            return 0
+            # simulate /plugin list returning success and containing vibesafe
+            if "/plugin list" in cmd:
+                class P:
+                    returncode = 0
+                    stdout = "vibesafe 1.0.0"
+                    stderr = ""
+                return P()
+            if check and False:  # pragma: no cover
+                raise subprocess.CalledProcessError(1, cmd, output="err", stderr="err")
+            class P:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+            return P()
 
         monkeypatch.setattr("vibesafe.cli.shutil.which", fake_which)
         monkeypatch.setattr("vibesafe.cli.subprocess.run", fake_run)
 
         result = runner.invoke(install_claude_plugin)
         assert result.exit_code == 0
-        assert len(calls) == 2
+        assert len(calls) == 3
         assert "/plugin marketplace add julep-ai/vibesafe" in " ".join(calls[0])
         assert "/plugin install vibesafe@Vibesafe" in " ".join(calls[1])
+        assert "/plugin list" in " ".join(calls[2])

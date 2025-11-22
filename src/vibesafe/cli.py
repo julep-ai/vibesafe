@@ -496,6 +496,7 @@ def install_claude_plugin() -> None:
     Steps:
     1) Add marketplace repo julep-ai/vibesafe
     2) Install plugin vibesafe@Vibesafe
+    3) Verify plugin is listed
     """
     claude_path = shutil.which("claude")
     if not claude_path:
@@ -520,12 +521,38 @@ def install_claude_plugin() -> None:
     for cmd in cmds:
         console.print(f"[cyan]Running:[/cyan] {' '.join(cmd)}")
         try:
-            subprocess.run(cmd, check=True)
+            completed = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            if completed.stdout:
+                console.print(completed.stdout.strip())
+            if completed.stderr:
+                console.print(completed.stderr.strip())
         except subprocess.CalledProcessError as exc:
             console.print(f"[red]Command failed:[/red] {' '.join(cmd)}")
+            if exc.stdout:
+                console.print(exc.stdout.strip())
+            if exc.stderr:
+                console.print(exc.stderr.strip())
             sys.exit(exc.returncode)
 
-    console.print("[green]Claude plugin installed (vibesafe@Vibesafe).[/green]")
+    # Verify installation
+    verify_cmd = [
+        claude_path,
+        "--print",
+        "--dangerously-skip-permissions",
+        "/plugin list",
+    ]
+    console.print(f"[cyan]Running:[/cyan] {' '.join(verify_cmd)}")
+    verify_proc = subprocess.run(verify_cmd, capture_output=True, text=True)
+    if verify_proc.stdout:
+        console.print(verify_proc.stdout.strip())
+    if verify_proc.stderr:
+        console.print(verify_proc.stderr.strip())
+
+    if verify_proc.returncode != 0 or "vibesafe" not in verify_proc.stdout.lower():
+        console.print("[red]Vibesafe plugin not detected after install.[/red]")
+        sys.exit(verify_proc.returncode or 1)
+
+    console.print("[green]Claude plugin installed and verified (vibesafe@Vibesafe).[/green]")
 
 
 @main.command()
