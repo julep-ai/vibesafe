@@ -310,6 +310,7 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
                 for uid in units_to_compile:
                     results.append(_compile_unit(uid, progress, task_ids[uid]))
                     progress.update(task_ids[uid], completed=True)
+                    progress.stop_task(task_ids[uid])
             else:
                 with ThreadPoolExecutor(max_workers=worker_count) as executor:
                     future_map = {
@@ -320,6 +321,7 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
                         uid = future_map[future]
                         results.append(future.result())
                         progress.update(task_ids[uid], completed=True)
+                        progress.stop_task(task_ids[uid])
 
     _run_compile()
 
