@@ -51,7 +51,7 @@ class OpenAICompatibleProvider:
         )
         self.last_metadata = CompletionMetadata()
 
-    def complete(self, *, prompt: str, seed: int, **kwargs: str | int | float) -> str:
+    def complete(self, *, prompt: str, seed: int, **kwargs: object) -> str:
         """
         Generate completion using OpenAI-compatible API.
 
@@ -107,7 +107,7 @@ class OpenAICompatibleProvider:
         if effort:
             reasoning = {"effort": effort}
 
-        response = self.client.responses.create(
+        response = self.client.responses.create(  # type: ignore[call-arg]
             model=self.config.model,
             input=[{"role": "user", "content": prompt}],
             reasoning=reasoning,
@@ -159,7 +159,7 @@ class CachedProvider:
 
         return hashlib.sha256("\n".join(key_parts).encode()).hexdigest()[:16]
 
-    def complete(self, *, prompt: str, seed: int, **kwargs: str | int | float) -> str:
+    def complete(self, *, prompt: str, seed: int, **kwargs: object) -> str:
         """
         Generate completion with caching.
 

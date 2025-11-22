@@ -372,8 +372,8 @@ class TestVibesafeCore:
         unit_id = rhash.__vibesafe_unit_id__
         unit_meta = get_unit(unit_id)
 
-        from vibesafe.ast_parser import extract_spec
         from vibesafe import config as config_module
+        from vibesafe.ast_parser import extract_spec
         from vibesafe.config import VibesafeConfig
         from vibesafe.core import _compute_spec_hash
 
