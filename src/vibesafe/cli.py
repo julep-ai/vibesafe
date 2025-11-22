@@ -211,7 +211,7 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
         units_to_compile = list(registry.keys())
 
     auto_workers = max(((os.cpu_count() or 4) - 2), 1)
-    worker_count = workers or auto_workers
+    worker_count = min(workers or auto_workers, len(units_to_compile))
 
     console.print(
         f"[bold]Compiling {len(units_to_compile)} unit(s) with {worker_count} worker(s)...[/bold]\n"
@@ -311,8 +311,7 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
                     results.append(_compile_unit(uid, progress, task_ids[uid]))
                     progress.update(task_ids[uid], completed=True)
             else:
-                max_workers = min(worker_count, len(units_to_compile))
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                with ThreadPoolExecutor(max_workers=worker_count) as executor:
                     future_map = {
                         executor.submit(_compile_unit, uid, progress, task_ids[uid]): uid
                         for uid in units_to_compile
