@@ -1,34 +1,30 @@
 {
-  "hooks": [
-    {
-      "event": "PostToolUse",
-      "matcher": {
-        "toolName": "Write",
-        "input": {
-          "path": "**/*.py"
-        }
-      },
-      "action": {
-        "type": "command",
-        "command": "grep -q '@vibesafe' \"$FILE_PATH\" && vibesafe compile --target \"$FILE_PATH\" > /dev/null 2>&1 &"
-      },
-      "timeout": 5,
-      "enabled": true
-    },
-    {
-      "event": "PreToolUse",
-      "matcher": {
-        "toolName": "Bash",
-        "input": {
-          "command": "git commit*"
-        }
-      },
-      "action": {
-        "type": "command",
-        "command": "vibesafe diff --exit-code"
-      },
-      "timeout": 10,
-      "enabled": true
-    }
-  ]
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$FILE_PATH\" == *.py ]] && grep -q '@vibesafe' \"$FILE_PATH\"; then vibesafe compile --target \"$FILE_PATH\" >/dev/null 2>&1 || true; fi",
+            "timeout": 5,
+            "enabled": true
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$COMMAND\" == git*commit* ]]; then vibesafe diff; fi",
+            "timeout": 10,
+            "enabled": true
+          }
+        ]
+      }
+    ]
+  }
 }

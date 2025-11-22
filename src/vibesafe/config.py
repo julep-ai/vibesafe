@@ -86,7 +86,9 @@ class VibesafeConfig(BaseModel):
 
         if config_path is None or not config_path.exists():
             # Return default config
-            return cls()
+            config = cls()
+            cls._apply_overrides(config, base_dir=Path.cwd())
+            return config
 
         with open(config_path, "rb") as f:
             data = tomllib.load(f)
@@ -105,7 +107,9 @@ class VibesafeConfig(BaseModel):
             "sandbox": SandboxConfig(**data.get("sandbox", {})),
         }
 
-        return cls(**config_dict)
+        config = cls(**config_dict)
+        cls._apply_overrides(config, base_dir=config_path.parent)
+        return config
 
     @staticmethod
     def _find_config() -> Path | None:
@@ -172,6 +176,26 @@ class VibesafeConfig(BaseModel):
         if p.is_absolute():
             return p
         return Path.cwd() / p
+
+    @staticmethod
+    def _apply_overrides(config: "VibesafeConfig", base_dir: Path) -> None:
+        """
+        Apply environment and local state overrides to the loaded config.
+        Precedence: VIBESAFE_ENV > .vibesafe/mode > vibesafe.toml
+        """
+        env_override = os.getenv("VIBESAFE_ENV")
+        if env_override:
+            config.project.env = env_override
+            return
+
+        mode_file = base_dir / ".vibesafe" / "mode"
+        if mode_file.exists():
+            try:
+                mode = mode_file.read_text().strip()
+                if mode:
+                    config.project.env = mode
+            except OSError:
+                pass
 
 
 # Global config instance

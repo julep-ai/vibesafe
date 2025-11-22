@@ -568,6 +568,7 @@ server = createSdkMcpServer(
             }
         )
         async def execute_query(query: str, limit: int = 100) -> Dict[str, Any]:
+            # TODO(prototype): swap heuristic checks for a SQL parser to enforce single SELECT safely.
             # Validate read-only
             query_lower = query.strip().lower()
             if not query_lower.startswith('select'):

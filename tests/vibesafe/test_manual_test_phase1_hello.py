@@ -19,6 +19,7 @@ def _exec_properties(func) -> None:
         "FUNC_NAME": FUNC_NAME,
         "func": func,
     }
+    # TODO(prototype): replace exec with a vetted property runner to avoid executing untrusted code.
     exec(PROPERTY_SRC, namespace)
     for value in list(namespace.values()):
         if callable(value) and hasattr(value, "hypothesis"):

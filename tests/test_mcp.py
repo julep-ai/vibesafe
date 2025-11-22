@@ -2,8 +2,19 @@
 Tests for vibesafe.mcp module.
 """
 
+import json
+
+import pytest
+
 from vibesafe import VibeCoded, vibesafe
 from vibesafe.mcp import MCPServer
+
+
+def _parse_single_response(output: str) -> dict:
+    """Parse a single JSON-RPC response line from captured stdout."""
+    lines = [line for line in output.strip().splitlines() if line]
+    assert len(lines) == 1, f"Expected single response line, got {len(lines)}: {lines}"
+    return json.loads(lines[0])
 
 
 class TestMCPServer:
@@ -12,24 +23,25 @@ class TestMCPServer:
     def test_initialization(self):
         """Test MCP server initialization."""
         server = MCPServer()
-        assert "scan" in server.methods
-        assert "compile" in server.methods
-        assert "test" in server.methods
-        assert "save" in server.methods
-        assert "status" in server.methods
+        assert "scan" in server.tools
+        assert "compile" in server.tools
+        assert "test" in server.tools
+        assert "save" in server.tools
+        assert "status" in server.tools
 
-    def test_handle_request_unknown_method(self):
+    def test_handle_request_unknown_method(self, capsys):
         """Test handling unknown method."""
         server = MCPServer()
         request = {"jsonrpc": "2.0", "method": "unknown_method", "id": 1}
-        response = server.handle_request(request)
+        server.handle_request(request)
 
+        response = _parse_single_response(capsys.readouterr().out)
         assert response["jsonrpc"] == "2.0"
         assert "error" in response
         assert response["error"]["code"] == -32601
         assert "Method not found" in response["error"]["message"]
 
-    def test_handle_request_scan(self, clear_vibesafe_registry):
+    def test_handle_request_scan(self, clear_vibesafe_registry, capsys):
         """Test handling scan request."""
 
         @vibesafe
@@ -39,37 +51,40 @@ class TestMCPServer:
 
         server = MCPServer()
         request = {"jsonrpc": "2.0", "method": "scan", "params": {}, "id": 1}
-        response = server.handle_request(request)
+        server.handle_request(request)
 
+        response = _parse_single_response(capsys.readouterr().out)
         assert response["jsonrpc"] == "2.0"
         assert "result" in response
         assert "units" in response["result"]
         assert "count" in response["result"]
 
-    def test_handle_request_status(self):
+    def test_handle_request_status(self, capsys):
         """Test handling status request."""
         server = MCPServer()
         request = {"jsonrpc": "2.0", "method": "status", "params": {}, "id": 1}
-        response = server.handle_request(request)
+        server.handle_request(request)
 
+        response = _parse_single_response(capsys.readouterr().out)
         assert response["jsonrpc"] == "2.0"
         assert "result" in response
         assert "version" in response["result"]
         assert "units" in response["result"]
 
-    def test_handle_request_with_error(self, mocker):
+    def test_handle_request_with_error(self, mocker, capsys):
         """Test handling request that raises error."""
         server = MCPServer()
 
-        # Mock scan method in the methods dictionary to raise error
+        # Mock scan tool to raise error
         def raise_error(params):
             raise RuntimeError("Test error")
 
-        server.methods["scan"] = raise_error
+        server.tools["scan"] = raise_error
 
         request = {"jsonrpc": "2.0", "method": "scan", "params": {}, "id": 1}
-        response = server.handle_request(request)
+        server.handle_request(request)
 
+        response = _parse_single_response(capsys.readouterr().out)
         assert response["jsonrpc"] == "2.0"
         assert "error" in response
         assert response["error"]["code"] == -32000
@@ -96,9 +111,8 @@ class TestMCPServer:
     def test_compile_method_no_target(self):
         """Test compile method without target."""
         server = MCPServer()
-        result = server.compile({})
-        assert "error" in result
-        assert "target parameter required" in result["error"]
+        with pytest.raises(ValueError, match="target parameter required"):
+            server.compile({})
 
     def test_test_method_no_target(self):
         """Test test method without target."""

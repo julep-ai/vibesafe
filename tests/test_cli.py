@@ -2,13 +2,26 @@
 Tests for vibesafe.cli module.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from click.testing import CliRunner
 
-from vibesafe import VibeCoded, get_unit, vibesafe
-from vibesafe.cli import check, compile, diff, main, repl, save, scan, status, test
+from vibesafe import VibeCoded, __version__, get_unit, vibesafe
+from vibesafe.cli import (
+    check,
+    compile,
+    diff,
+    install_claude_plugin,
+    main,
+    mode,
+    repl,
+    save,
+    scan,
+    status,
+    test,
+)
 
 
 class TestCLI:
@@ -43,7 +56,7 @@ class TestCLI:
         """Test version flag."""
         result = runner.invoke(main, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert __version__ in result.output
 
     def test_scan_no_units(
         self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
@@ -346,3 +359,48 @@ class TestCLI:
         assert result.exit_code == 0
         assert unit_id in freeze_called.get("units", [])
         self.assert_console_output(mock_console, "Tests passed")
+
+    def test_mode_set_persists(self, runner, temp_dir, monkeypatch, mock_console):
+        """mode --value writes .vibesafe/mode."""
+        monkeypatch.chdir(temp_dir)
+        result = runner.invoke(mode, ["--value", "prod"])
+        assert result.exit_code == 0
+        mode_file = Path(temp_dir) / ".vibesafe" / "mode"
+        assert mode_file.read_text() == "prod"
+        self.assert_console_output(mock_console, "Persisted mode set to 'prod'")
+
+    def test_mode_show_reads_persisted(self, runner, temp_dir, monkeypatch, mock_console):
+        """mode (no args) reports effective mode from persisted file."""
+        monkeypatch.chdir(temp_dir)
+        mode_file = Path(temp_dir) / ".vibesafe" / "mode"
+        mode_file.parent.mkdir(parents=True, exist_ok=True)
+        mode_file.write_text("dev")
+
+        result = runner.invoke(mode)
+        assert result.exit_code == 0
+        self.assert_console_output(mock_console, "Effective mode: dev")
+
+    def test_install_claude_plugin_runs_commands(
+        self, runner, monkeypatch, mock_console, temp_dir
+    ):
+        """install-claude-plugin should invoke claude CLI commands."""
+
+        calls = []
+
+        def fake_which(prog: str):
+            if prog == "claude":
+                return "/usr/bin/claude"
+            return None
+
+        def fake_run(cmd, check):
+            calls.append(cmd)
+            return 0
+
+        monkeypatch.setattr("vibesafe.cli.shutil.which", fake_which)
+        monkeypatch.setattr("vibesafe.cli.subprocess.run", fake_run)
+
+        result = runner.invoke(install_claude_plugin)
+        assert result.exit_code == 0
+        assert len(calls) == 2
+        assert "/plugin marketplace add julep-ai/vibesafe" in " ".join(calls[0])
+        assert "/plugin install vibesafe@Vibesafe" in " ".join(calls[1])

@@ -1,5 +1,7 @@
 """CLI commands for vibesafe."""
 
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +17,7 @@ from vibesafe.codegen import generate_for_unit
 from vibesafe.config import get_config, resolve_template_id
 from vibesafe.core import get_registry, get_unit
 from vibesafe.hashing import compute_dependency_digest, compute_spec_hash
+from vibesafe.mcp import MCPServer
 from vibesafe.runtime import update_index
 from vibesafe.testing import run_all_tests, test_unit
 
@@ -476,6 +479,100 @@ def check() -> None:
     else:
         console.print("\n[bold red]Check failed – see messages above.[/bold red]")
         sys.exit(1)
+
+
+@main.command()
+def mcp() -> None:
+    """Run the Vibesafe MCP server over stdio (editor integration)."""
+    server = MCPServer()
+    server.run()
+
+
+@main.command(name="install-claude-plugin")
+def install_claude_plugin() -> None:
+    """
+    Install the Vibesafe Claude plugin via the Claude CLI.
+
+    Steps:
+    1) Add marketplace repo julep-ai/vibesafe
+    2) Install plugin vibesafe@Vibesafe
+    """
+    claude_path = shutil.which("claude")
+    if not claude_path:
+        console.print("[red]Claude CLI not found in PATH. Install it first.[/red]")
+        sys.exit(1)
+
+    cmds = [
+        [
+            claude_path,
+            "--print",
+            "--dangerously-skip-permissions",
+            "/plugin marketplace add julep-ai/vibesafe",
+        ],
+        [
+            claude_path,
+            "--print",
+            "--dangerously-skip-permissions",
+            "/plugin install vibesafe@Vibesafe",
+        ],
+    ]
+
+    for cmd in cmds:
+        console.print(f"[cyan]Running:[/cyan] {' '.join(cmd)}")
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as exc:
+            console.print(f"[red]Command failed:[/red] {' '.join(cmd)}")
+            sys.exit(exc.returncode)
+
+    console.print("[green]Claude plugin installed (vibesafe@Vibesafe).[/green]")
+
+
+@main.command()
+@click.option(
+    "--value",
+    type=click.Choice(["dev", "prod"]),
+    help="Set the vibesafe mode (persists to .vibesafe/mode).",
+)
+@click.option(
+    "--clear",
+    is_flag=True,
+    default=False,
+    help="Remove persisted mode file (.vibesafe/mode).",
+)
+def mode(value: str | None, clear: bool) -> None:
+    """
+    View or set the vibesafe mode.
+
+    Precedence: VIBESAFE_ENV > .vibesafe/mode > vibesafe.toml default.
+    """
+    mode_file = Path(".vibesafe") / "mode"
+
+    if clear:
+        try:
+            mode_file.unlink()
+            console.print("[green]Cleared persisted mode (.vibesafe/mode).[/green]")
+        except FileNotFoundError:
+            console.print("[yellow].vibesafe/mode not found; nothing to clear.[/yellow]")
+
+    if value:
+        mode_file.parent.mkdir(parents=True, exist_ok=True)
+        mode_file.write_text(value)
+        console.print(f"[green]Persisted mode set to '{value}' in .vibesafe/mode.[/green]")
+
+    cfg = get_config(reload=True)
+
+    env_var = os.getenv("VIBESAFE_ENV")
+    persisted = None
+    if mode_file.exists():
+        try:
+            persisted = mode_file.read_text().strip() or None
+        except OSError:
+            persisted = None
+
+    console.print(f"VIBESAFE_ENV: {env_var or '<unset>'}")
+    console.print(f".vibesafe/mode: {persisted or '<missing>'}")
+    console.print(f"Effective mode: {cfg.project.env}")
 
 
 @main.command()

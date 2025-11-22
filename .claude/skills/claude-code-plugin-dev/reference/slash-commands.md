@@ -383,6 +383,7 @@ argument-hint: "SQL query"
 
 Validating query: $ARGUMENTS
 
+TODO (prototype): run inside a read-only transaction to block accidental writes.
 Ensure this is a READ-ONLY query (SELECT only). If it contains INSERT, UPDATE, DELETE, or DROP, STOP and warn the user.
 
 ## Execute Query

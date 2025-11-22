@@ -139,6 +139,7 @@ class CodeGenerator:
             template_file = Path.cwd() / template_file
 
         if not template_file.exists():
+            # TODO(prototype): switch to importlib.resources for packaged templates to avoid path drift.
             # Try relative to package
             # vibesafe/codegen.py -> vibesafe/ -> src/ -> root
             # We want to look inside the package, so we need to find where 'vibesafe' package is installed

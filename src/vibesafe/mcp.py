@@ -42,6 +42,7 @@ class MCPServer:
                 request = json.loads(line)
                 self.handle_request(request)
             except Exception:
+                # TODO(prototype): return JSON-RPC parse error (-32700) instead of silently ignoring.
                 # If we can't parse JSON, we can't even reply with an ID
                 # But we should try to log or send a generic error if possible
                 pass

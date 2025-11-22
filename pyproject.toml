@@ -22,6 +22,7 @@ dependencies = [
 dev = [
     "poethepoet>=0.37.0",
     "ty>=0.0.1a25",
+    "mcp-use",
     "pytest>=8.0.0",
     "pytest-xdist>=3.5.0",  # Parallel test execution
     "pytest-cov>=5.0.0",     # Coverage reporting
