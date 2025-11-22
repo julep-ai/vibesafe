@@ -58,6 +58,8 @@ class CodeGenerator:
         force: bool = False,
         allow_missing_doctest: bool = False,
         feedback: str | None = None,
+        previous_response_id: str | None = None,
+        previous_reasoning_details: dict | None = None,
     ) -> dict[str, Any]:
         """
         Generate implementation for this unit.
@@ -92,7 +94,12 @@ class CodeGenerator:
         prompt_hash = compute_prompt_hash(prompt)
 
         # Call LLM
-        generated_code = self._generate_code(prompt, spec_hash)
+        generated_code = self._generate_code(
+            prompt,
+            spec_hash,
+            previous_response_id=previous_response_id,
+            previous_reasoning_details=previous_reasoning_details,
+        )
         self._validate_generated_code(generated_code)
 
         # Compute checkpoint hash
@@ -100,6 +107,12 @@ class CodeGenerator:
 
         # Save checkpoint
         checkpoint_info = self._save_checkpoint(spec_hash, chk_hash, prompt_hash, generated_code)
+
+        # Attach provider metadata so callers can chain reasoning-aware retries
+        checkpoint_info["response_id"] = getattr(self.provider, "last_metadata", {}).response_id
+        checkpoint_info["reasoning_details"] = getattr(
+            getattr(self.provider, "last_metadata", None), "reasoning_details", None
+        )
 
         return checkpoint_info
 
@@ -195,11 +208,24 @@ class CodeGenerator:
 
         return template.render(**context)
 
-    def _generate_code(self, prompt: str, spec_hash: str) -> str:
+    def _generate_code(
+        self,
+        prompt: str,
+        spec_hash: str,
+        *,
+        previous_response_id: str | None = None,
+        previous_reasoning_details: dict | None = None,
+    ) -> str:
         """Call LLM to generate code."""
         seed = self.provider_config.seed
         try:
-            generated = self.provider.complete(prompt=prompt, seed=seed, spec_hash=spec_hash)
+            generated = self.provider.complete(
+                prompt=prompt,
+                seed=seed,
+                spec_hash=spec_hash,
+                previous_response_id=previous_response_id,
+                reasoning_details=previous_reasoning_details,
+            )
         except Exception as exc:  # pragma: no cover - provider errors are environment-specific
             raise VibesafeProviderError(f"Provider request failed: {exc}") from exc
         return self._clean_generated_code(generated)
@@ -422,6 +448,8 @@ def generate_for_unit(
     force: bool = False,
     allow_missing_doctest: bool = False,
     feedback: str | None = None,
+    previous_response_id: str | None = None,
+    previous_reasoning_details: dict | None = None,
 ) -> dict[str, Any]:
     """
     Generate code for a specific unit.
@@ -444,4 +472,6 @@ def generate_for_unit(
         force=force,
         allow_missing_doctest=allow_missing_doctest,
         feedback=feedback,
+        previous_response_id=previous_response_id,
+        previous_reasoning_details=previous_reasoning_details,
     )

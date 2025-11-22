@@ -232,6 +232,8 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
         checkpoint_info: dict[str, object] | None = None
         test_result: object | None = None
         errors: list[str] = []
+        previous_response_id: str | None = None
+        previous_reasoning_details: dict | None = None
 
         for attempt in range(1, max_iterations + 1):
             try:
@@ -244,6 +246,14 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
                     unit_id,
                     force=(force or attempt > 1),
                     feedback="\n".join(errors) if errors else None,
+                    previous_response_id=previous_response_id,
+                    previous_reasoning_details=previous_reasoning_details,
+                )
+                previous_response_id = (
+                    checkpoint_info.get("response_id") if checkpoint_info else None
+                )
+                previous_reasoning_details = (
+                    checkpoint_info.get("reasoning_details") if checkpoint_info else None
                 )
                 if progress and task_id is not None:
                     progress.update(
