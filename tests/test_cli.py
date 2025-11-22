@@ -380,41 +380,20 @@ class TestCLI:
         assert result.exit_code == 0
         self.assert_console_output(mock_console, "Effective mode: dev")
 
-    def test_install_claude_plugin_runs_commands(
+    def test_install_claude_plugin_prints_instructions(
         self, runner, monkeypatch, mock_console, temp_dir
     ):
-        """install-claude-plugin should invoke claude CLI commands."""
-
-        calls = []
+        """install-claude-plugin should print manual instructions."""
 
         def fake_which(prog: str):
             if prog == "claude":
                 return "/usr/bin/claude"
             return None
 
-        def fake_run(cmd, check=False, capture_output=False, text=False):
-            calls.append(cmd)
-            # simulate /plugin list returning success and containing vibesafe
-            if "/plugin list" in cmd:
-                class P:
-                    returncode = 0
-                    stdout = "vibesafe 1.0.0"
-                    stderr = ""
-                return P()
-            if check and False:  # pragma: no cover
-                raise subprocess.CalledProcessError(1, cmd, output="err", stderr="err")
-            class P:
-                returncode = 0
-                stdout = ""
-                stderr = ""
-            return P()
-
         monkeypatch.setattr("vibesafe.cli.shutil.which", fake_which)
-        monkeypatch.setattr("vibesafe.cli.subprocess.run", fake_run)
 
         result = runner.invoke(install_claude_plugin)
         assert result.exit_code == 0
-        assert len(calls) == 3
-        assert "/plugin marketplace add julep-ai/vibesafe" in " ".join(calls[0])
-        assert "/plugin install vibesafe@Vibesafe" in " ".join(calls[1])
-        assert "/plugin list" in " ".join(calls[2])
+        self.assert_console_output(mock_console, "Manual install steps for Claude plugin")
+        self.assert_console_output(mock_console, "/plugin marketplace add julep-ai/vibesafe")
+        self.assert_console_output(mock_console, "/plugin install vibesafe@Vibesafe")
