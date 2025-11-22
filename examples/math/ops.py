@@ -2,7 +2,7 @@
 Example vibesafe functions for mathematical operations.
 """
 
-from vibesafe import VibesafeHandled, vibesafe
+from vibesafe import VibeCoded, vibesafe
 
 
 @vibesafe
@@ -19,7 +19,7 @@ def sum_str(a: str, b: str) -> str:
     """
     # Convert to ints for the AI to understand the context
     a_int, b_int = int(a), int(b)
-    yield VibesafeHandled()
+    raise VibeCoded()
 
 
 @vibesafe
@@ -38,7 +38,7 @@ def fibonacci(n: int) -> int:
     """
     if n < 0:
         raise ValueError("n must be non-negative")
-    yield VibesafeHandled()
+    raise VibeCoded()
 
 
 @vibesafe
@@ -59,4 +59,4 @@ def is_prime(n: int) -> bool:
     """
     if n < 2:
         return False
-    yield VibesafeHandled()
+    raise VibeCoded()

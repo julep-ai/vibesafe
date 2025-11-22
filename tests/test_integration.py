@@ -4,7 +4,7 @@ Integration tests for vibesafe end-to-end workflows.
 
 import pytest
 
-from vibesafe import VibesafeHandled, get_registry, get_unit, vibesafe
+from vibesafe import VibeCoded, get_registry, get_unit, vibesafe
 
 
 @pytest.mark.integration
@@ -12,7 +12,7 @@ class TestEndToEndWorkflow:
     """Integration tests for complete vibesafe workflow."""
 
     def test_complete_function_workflow(
-        self, test_config, temp_dir, monkeypatch, clear_defless_registry, mocker
+        self, test_config, temp_dir, monkeypatch, clear_vibesafe_registry, mocker
     ):
         """Test complete workflow: define -> compile -> test -> load."""
         monkeypatch.chdir(temp_dir)
@@ -31,7 +31,7 @@ class TestEndToEndWorkflow:
             >>> multiply(5, 2)
             10
             """
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         unit_id = multiply.__vibesafe_unit_id__
 
@@ -81,7 +81,7 @@ def multiply(a: int, b: int) -> int:
 
     @pytest.mark.integration
     def test_http_endpoint_workflow(
-        self, test_config, temp_dir, monkeypatch, clear_defless_registry, mocker
+        self, test_config, temp_dir, monkeypatch, clear_vibesafe_registry, mocker
     ):
         """Test HTTP endpoint workflow."""
         monkeypatch.chdir(temp_dir)
@@ -99,14 +99,14 @@ def multiply(a: int, b: int) -> int:
             >>> anyio.run(double_endpoint, 5)
             {'result': 10}
             """
-            return VibesafeHandled()
+            return VibeCoded()
 
         unit_id = double_endpoint.__vibesafe_unit_id__
         assert get_unit(unit_id)["kind"] == "http"
 
     @pytest.mark.integration
     def test_multiple_functions_workflow(
-        self, test_config, temp_dir, monkeypatch, clear_defless_registry
+        self, test_config, temp_dir, monkeypatch, clear_vibesafe_registry
     ):
         """Test workflow with multiple functions."""
         monkeypatch.chdir(temp_dir)
@@ -118,17 +118,17 @@ def multiply(a: int, b: int) -> int:
         @vibesafe
         def func_a(x: int) -> int:
             """Function A."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         @vibesafe
         def func_b(x: str) -> str:
             """Function B."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         @vibesafe
         def func_c(x: float) -> float:
             """Function C."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         registry = get_registry()
         assert len([u for u in registry if "func_a" in u or "func_b" in u or "func_c" in u]) >= 3
@@ -166,7 +166,7 @@ api_key_env = "CUSTOM_API_KEY"
         assert config.provider["custom"].model == "custom-model"
 
     @pytest.mark.integration
-    def test_spec_extraction_workflow(self, clear_defless_registry):
+    def test_spec_extraction_workflow(self, clear_vibesafe_registry):
         """Test spec extraction from decorated function."""
 
         @vibesafe
@@ -180,7 +180,7 @@ api_key_env = "CUSTOM_API_KEY"
             'result'
             """
             result = a + b
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         from vibesafe.ast_parser import extract_spec
 
@@ -279,13 +279,13 @@ class TestErrorHandling:
         with pytest.raises(VibesafeCheckpointMissing):
             load_checkpoint("nonexistent/unit")
 
-    def test_uncompiled_function_error(self, clear_defless_registry):
+    def test_uncompiled_function_error(self, clear_vibesafe_registry):
         """Test error when calling uncompiled function."""
 
         @vibesafe
         def uncompiled(x: int) -> int:
             """Not compiled."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         with pytest.raises(RuntimeError, match="has not been compiled yet"):
             uncompiled(5)

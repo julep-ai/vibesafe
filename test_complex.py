@@ -2,7 +2,7 @@
 Complex test cases for vibesafe to test markdown stripping.
 """
 
-from vibesafe import VibesafeHandled, vibesafe
+from vibesafe import VibeCoded, vibesafe
 
 
 @vibesafe.func
@@ -21,7 +21,7 @@ def fibonacci_list(n: int) -> list[int]:
     """
     if n < 0:
         raise ValueError("n must be non-negative")
-    yield VibesafeHandled()
+    raise VibeCoded()
 
 
 @vibesafe.func
@@ -37,5 +37,5 @@ def word_frequency(text: str) -> dict[str, int]:
     {}
     """
     # Normalize text to lowercase for counting
-    text.lower()
-    yield VibesafeHandled()
+    text = text.lower()
+    raise VibeCoded()

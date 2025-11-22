@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$FILE_PATH\" == *.py ]] && grep -q '@vibesafe' \"$FILE_PATH\"; then vibesafe compile --target \"$FILE_PATH\" >/dev/null 2>&1 || true; fi",
+            "timeout": 5,
+            "enabled": true
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$COMMAND\" == git*commit* ]]; then vibesafe diff; fi",
+            "timeout": 10,
+            "enabled": true
+          }
+        ]
+      }
+    ]
+  }
+}

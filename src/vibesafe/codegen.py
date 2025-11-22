@@ -2,6 +2,8 @@
 Code generation orchestration - prompt rendering and LLM calls.
 """
 
+import ast
+import inspect
 import platform
 import sys
 import textwrap
@@ -18,7 +20,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from vibesafe import __version__
 from vibesafe.ast_parser import extract_spec
-from vibesafe.config import get_config
+from vibesafe.config import get_config, resolve_template_id
 from vibesafe.exceptions import (
     VibesafeMissingDoctest,
     VibesafeProviderError,
@@ -100,7 +102,11 @@ class CodeGenerator:
 
     def _compute_spec_hash(self) -> str:
         """Compute spec hash for this unit."""
-        template_id = self.unit_meta.get("template") or "function.j2"
+        template_id = resolve_template_id(
+            self.unit_meta,
+            self.config,
+            spec_type=self.spec.get("type"),
+        )
         provider_model = self.provider_config.model
         dependency_digest = compute_dependency_digest(self.spec["dependencies"])
         provider_params = {
@@ -121,9 +127,11 @@ class CodeGenerator:
 
     def _render_prompt(self) -> str:
         """Render prompt from template."""
-        template_path = self.unit_meta.get("template") or self.config.prompts.function
-        if self.unit_meta.get("type") == "http":
-            template_path = self.unit_meta.get("template") or self.config.prompts.http
+        template_path = resolve_template_id(
+            self.unit_meta,
+            self.config,
+            spec_type=self.spec.get("type"),
+        )
 
         # Resolve template path
         template_file = Path(template_path)
@@ -131,9 +139,32 @@ class CodeGenerator:
             template_file = Path.cwd() / template_file
 
         if not template_file.exists():
+            # TODO(prototype): switch to importlib.resources for packaged templates to avoid path drift.
             # Try relative to package
-            pkg_dir = Path(__file__).parent.parent.parent
-            template_file = pkg_dir / template_path
+            # vibesafe/codegen.py -> vibesafe/ -> src/ -> root
+            # We want to look inside the package, so we need to find where 'vibesafe' package is installed
+            # If template_path is 'vibesafe/templates/function.j2', we should look for it relative to site-packages or src
+
+            # Try finding it relative to this file's parent (vibesafe package root)
+            # If template_path starts with 'vibesafe/', strip it to avoid duplication if we are already in vibesafe dir
+
+            current_file_dir = Path(__file__).parent
+
+            # Case 1: template_path is like "vibesafe/templates/function.j2"
+            # and we are in ".../site-packages/vibesafe"
+            # We want ".../site-packages/vibesafe/templates/function.j2"
+
+            if template_path.startswith("vibesafe/"):
+                rel_path = template_path.replace("vibesafe/", "", 1)
+                candidate = current_file_dir / rel_path
+                if candidate.exists():
+                    template_file = candidate
+
+            if not template_file.exists():
+                # Fallback: allow configured top-level prompts/ paths to resolve to packaged templates
+                candidate = current_file_dir / "templates" / Path(template_path).name
+                if candidate.exists():
+                    template_file = candidate
 
         if not template_file.exists():
             raise FileNotFoundError(f"Template not found: {template_path}")
@@ -155,6 +186,7 @@ class CodeGenerator:
             "unit_id": self.unit_id,
             "unit_meta": self.unit_meta,
             "vibesafe_version": __version__,
+            "spec_type": self.spec.get("type"),
         }
 
         return template.render(**context)
@@ -205,14 +237,83 @@ class CodeGenerator:
         """
         Perform basic validation on generated code.
 
-        Ensures the implementation defines the expected function name.
+        Ensures the implementation defines the expected function name,
+        matches async/sync, and preserves the parameter signature shape.
         """
         func_name = self.func.__name__
-        signature_token = f"def {func_name}"
-        if signature_token not in code:
+
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as exc:
             raise VibesafeValidationError(
-                f"Generated code for {self.unit_id} is missing definition '{signature_token}'."
+                f"Generated code for {self.unit_id} is not valid Python: {exc}"
+            ) from exc
+
+        fn_node = None
+        is_async_impl = False
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == func_name:
+                fn_node = node
+                break
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == func_name:
+                fn_node = node
+                is_async_impl = True
+                break
+
+        if fn_node is None:
+            raise VibesafeValidationError(
+                f"Generated code for {self.unit_id} is missing definition '{func_name}'."
             )
+
+        expected_async = inspect.iscoroutinefunction(self.func)
+        if expected_async != is_async_impl:
+            mode = "async" if expected_async else "sync"
+            raise VibesafeValidationError(
+                f"Generated implementation for {self.unit_id} must be {mode} to match the spec."
+            )
+
+        expected_sig = inspect.signature(self.func)
+        generated_sig = self._signature_from_ast(fn_node)
+
+        if generated_sig != self._signature_to_shape(expected_sig):
+            raise VibesafeValidationError(
+                f"Generated signature for {self.unit_id} does not match spec. "
+                f"expected={self._signature_to_shape(expected_sig)}, got={generated_sig}"
+            )
+
+    # ----------------- Signature utilities -----------------
+    def _signature_from_ast(
+        self, fn_node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> list[tuple[str, str]]:
+        """Return a lightweight shape of the function signature."""
+        args = fn_node.args
+        shape: list[tuple[str, str]] = []
+
+        for arg in args.posonlyargs:
+            shape.append((arg.arg, "posonly"))
+        for arg in args.args:
+            shape.append((arg.arg, "poskw"))
+        if args.vararg:
+            shape.append((args.vararg.arg, "vararg"))
+        for arg in args.kwonlyargs:
+            shape.append((arg.arg, "kwonly"))
+        if args.kwarg:
+            shape.append((args.kwarg.arg, "varkw"))
+        return shape
+
+    def _signature_to_shape(self, sig: inspect.Signature) -> list[tuple[str, str]]:
+        """Convert an inspect.Signature to the same lightweight shape."""
+        mapping = {
+            inspect.Parameter.POSITIONAL_ONLY: "posonly",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD: "poskw",
+            inspect.Parameter.VAR_POSITIONAL: "vararg",
+            inspect.Parameter.KEYWORD_ONLY: "kwonly",
+            inspect.Parameter.VAR_KEYWORD: "varkw",
+        }
+        shape: list[tuple[str, str]] = []
+        for param in sig.parameters.values():
+            shape.append((param.name, mapping[param.kind]))
+        return shape
 
     def _get_checkpoint_dir(self, spec_hash: str) -> Path:
         """Get checkpoint directory for a spec hash."""
@@ -239,7 +340,11 @@ class CodeGenerator:
         # Write metadata
         created_at = datetime.now(UTC).isoformat()
         meta_path = checkpoint_dir / "meta.toml"
-        template_id = self.unit_meta.get("template", "prompts/function.j2")
+        template_id = resolve_template_id(
+            self.unit_meta,
+            self.config,
+            spec_type=self.spec.get("type"),
+        )
         dependency_digest = compute_dependency_digest(self.spec["dependencies"])
         signature_text = self.spec["signature"]
         docstring_text = self.spec["docstring"] or ""

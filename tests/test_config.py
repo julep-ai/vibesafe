@@ -24,7 +24,7 @@ class TestProviderConfig:
         """Test provider config with default values."""
         config = ProviderConfig()
         assert config.kind == "openai-compatible"
-        assert config.model == "gpt-4o-mini"
+        assert config.model == "gpt-5-mini"
         assert config.temperature == 0.0
         assert config.seed == 42
         assert config.timeout == 60
@@ -76,6 +76,7 @@ class TestPromptsConfig:
         config = PromptsConfig()
         assert config.function == "prompts/function.j2"
         assert config.http == "prompts/http_endpoint.j2"
+        assert config.cli == "prompts/cli_command.j2"
 
 
 class TestProjectConfig:
@@ -91,6 +92,25 @@ class TestProjectConfig:
         """Test production environment."""
         config = ProjectConfig(env="prod")
         assert config.env == "prod"
+
+    def test_env_override(self, monkeypatch):
+        """Environment variable should override project env."""
+        monkeypatch.setenv("VIBESAFE_ENV", "prod")
+        config = VibesafeConfig.load(config_path=None)
+        assert config.project.env == "prod"
+
+    def test_mode_file_override(self, tmp_path, monkeypatch):
+        """Mode file should override config default when env not set."""
+        project_root = tmp_path
+        mode_dir = project_root / ".vibesafe"
+        mode_dir.mkdir()
+        (mode_dir / "mode").write_text("prod")
+
+        monkeypatch.chdir(project_root)
+        monkeypatch.delenv("VIBESAFE_ENV", raising=False)
+
+        config = VibesafeConfig.load(config_path=None)
+        assert config.project.env == "prod"
 
 
 class TestSandboxConfig:

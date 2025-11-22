@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv venv
-          uv pip install -e ".[dev]"
+          uv pip install -e . --group dev
 
       - name: Run ruff check
         run: |
@@ -39,7 +39,7 @@ jobs:
           ruff format --check src/ tests/ examples/
 
   type-check:
-    name: Type Check with mypy
+    name: Type Check with ty
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,12 +57,12 @@ jobs:
       - name: Install dependencies
         run: |
           uv venv
-          uv pip install -e ".[dev]"
+          uv pip install -e . --group dev
 
-      - name: Run mypy
+      - name: Run ty
         run: |
           source .venv/bin/activate
-          mypy src/vibesafe/
+          ty check
 
   test:
     name: Test Suite
@@ -86,7 +86,15 @@ jobs:
       - name: Install dependencies
         run: |
           uv venv
-          uv pip install -e ".[dev]"
+          uv pip install -e . --group dev
+
+      - name: Generate checkpoints (examples/manual) [3.12 only]
+        if: matrix.python-version == '3.12'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          source .venv/bin/activate
+          vibesafe compile
 
       - name: Run tests
         run: |

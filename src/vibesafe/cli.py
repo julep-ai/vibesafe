@@ -1,5 +1,7 @@
 """CLI commands for vibesafe."""
 
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -12,9 +14,10 @@ from rich.table import Table
 from vibesafe import __version__
 from vibesafe.ast_parser import extract_spec
 from vibesafe.codegen import generate_for_unit
-from vibesafe.config import get_config
+from vibesafe.config import get_config, resolve_template_id
 from vibesafe.core import get_registry, get_unit
 from vibesafe.hashing import compute_dependency_digest, compute_spec_hash
+from vibesafe.mcp import MCPServer
 from vibesafe.runtime import update_index
 from vibesafe.testing import run_all_tests, test_unit
 
@@ -29,12 +32,7 @@ def main() -> None:
 
 
 @main.command()
-@click.option(
-    "--write-shims",
-    is_flag=True,
-    help="Write __generated__ shim files (DEPRECATED)",
-)
-def scan(write_shims: bool) -> None:
+def scan() -> None:
     """
     Scan project for vibesafe-decorated functions.
 
@@ -59,7 +57,7 @@ def scan(write_shims: bool) -> None:
     config = get_config()
     index_path = config.resolve_path(config.paths.index)
 
-    active_units = {}
+    active_index: dict[str, dict[str, str]] = {}
     if index_path.exists():
         if sys.version_info >= (3, 11):
             import tomllib
@@ -67,28 +65,52 @@ def scan(write_shims: bool) -> None:
             import tomli as tomllib
 
         with open(index_path, "rb") as f:
-            index = tomllib.load(f)
-            active_units = {uid: data.get("active", "") for uid, data in index.items()}
+            active_index = tomllib.load(f)
 
     for unit_id, unit_meta in sorted(registry.items()):
-        unit_type = unit_meta.get("type", "function")
-
-        # Count doctests
-        from vibesafe.ast_parser import extract_spec
+        unit_type = (
+            unit_meta.get("kind")
+            or unit_meta.get("type")
+            or ("http" if "method" in unit_meta else "function")
+        )
 
         spec = extract_spec(unit_meta["func"])
         doctest_count = len(spec["doctests"])
 
-        # Check status
-        status = "⚠️  Not compiled" if unit_id not in active_units else "✅ Active"
+        # Compute drift vs active checkpoint if present
+        provider_name = unit_meta.get("provider") or "default"
+        provider_cfg = config.get_provider(provider_name)
+        dependency_digest = compute_dependency_digest(spec["dependencies"])
+        provider_params = {
+            "temperature": provider_cfg.temperature,
+            "seed": provider_cfg.seed,
+            "timeout": provider_cfg.timeout,
+        }
+        template_id = resolve_template_id(unit_meta, config, spec.get("type"))
+        current_hash = compute_spec_hash(
+            signature=spec["signature"],
+            docstring=spec["docstring"],
+            body_before_handled=spec["body_before_handled"],
+            template_id=template_id,
+            provider_model=provider_cfg.model,
+            provider_params=provider_params,
+            dependency_digest=dependency_digest,
+        )
 
-        table.add_row(unit_id, unit_type, str(doctest_count), status)
+        unit_index = active_index.get(unit_id, {})
+        active_hash = unit_index.get("active")
+
+        if not active_hash:
+            status = "⚠️  inactive"
+        elif active_hash == current_hash:
+            status = "✅ in sync"
+        else:
+            status = "⚠️  drift"
+
+        table.add_row(unit_id, str(unit_type), str(doctest_count), status)
 
     console.print(table)
     console.print(f"\n[bold]Total units:[/bold] {len(registry)}")
-
-    if write_shims:
-        console.print("\n[yellow]Shims are deprecated and no longer needed.[/yellow]")
 
 
 @main.command()
@@ -124,6 +146,8 @@ def compile(target: str | None, force: bool) -> None:
 
     console.print(f"[bold]Compiling {len(units_to_compile)} unit(s)...[/bold]\n")
 
+    had_failures = False
+
     for unit_id in units_to_compile:
         console.print(f"[cyan]→ {unit_id}[/cyan]")
 
@@ -131,7 +155,6 @@ def compile(target: str | None, force: bool) -> None:
             checkpoint_info = generate_for_unit(unit_id, force=force)
             console.print(f"  ✓ Generated checkpoint: {checkpoint_info['spec_hash'][:8]}")
 
-            # Update index
             update_index(
                 unit_id,
                 checkpoint_info["spec_hash"],
@@ -139,12 +162,28 @@ def compile(target: str | None, force: bool) -> None:
             )
             console.print("  ✓ Updated index")
 
+            test_result = test_unit(unit_id)
+            if test_result:
+                console.print(f"  ✓ Tests passed ({test_result.total} total)")
+            else:
+                had_failures = True
+                console.print(
+                    f"  [red]✗ Tests failed ({test_result.failures}/{test_result.total})[/red]"
+                )
+                for error in test_result.errors:
+                    console.print(f"    • {error}")
+
         except Exception as e:
+            had_failures = True
             console.print(f"  [red]✗ Error: {e}[/red]")
             if "--verbose" in sys.argv:
                 import traceback
 
                 traceback.print_exc()
+
+    if had_failures:
+        console.print("\n[bold red]Compilation finished with errors.[/bold red]")
+        sys.exit(1)
 
     console.print("\n[bold green]Compilation complete![/bold green]")
 
@@ -277,7 +316,7 @@ def status() -> None:
             "seed": provider_cfg.seed,
             "timeout": provider_cfg.timeout,
         }
-        template_id = unit_meta.get("template", "prompts/function.j2")
+        template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
             docstring=spec["docstring"],
@@ -351,7 +390,7 @@ def diff(target: str | None) -> None:
             "seed": provider_cfg.seed,
             "timeout": provider_cfg.timeout,
         }
-        template_id = unit_meta.get("template", "prompts/function.j2")
+        template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
             docstring=spec["docstring"],
@@ -443,6 +482,80 @@ def check() -> None:
 
 
 @main.command()
+def mcp() -> None:
+    """Run the Vibesafe MCP server over stdio (editor integration)."""
+    server = MCPServer()
+    server.run()
+
+
+@main.command(name="install-claude-plugin")
+def install_claude_plugin() -> None:
+    """
+    Install the Vibesafe Claude plugin via the Claude CLI.
+
+    This prints manual steps because programmatic /plugin invocations can be flaky.
+    """
+    claude_path = shutil.which("claude")
+    if not claude_path:
+        console.print("[red]Claude CLI not found in PATH. Install it first.[/red]")
+        sys.exit(1)
+
+    console.print("[bold]Manual install steps for Claude plugin:[/bold]")
+    console.print("1) Add marketplace: /plugin marketplace add julep-ai/vibesafe")
+    console.print("2) Install plugin:   /plugin install vibesafe@Vibesafe")
+    console.print("3) Verify:           /plugin list (should show vibesafe)")
+    console.print("\nRun these in Claude. Claude CLI located at:")
+    console.print(f"  {claude_path}")
+
+
+@main.command()
+@click.option(
+    "--value",
+    type=click.Choice(["dev", "prod"]),
+    help="Set the vibesafe mode (persists to .vibesafe/mode).",
+)
+@click.option(
+    "--clear",
+    is_flag=True,
+    default=False,
+    help="Remove persisted mode file (.vibesafe/mode).",
+)
+def mode(value: str | None, clear: bool) -> None:
+    """
+    View or set the vibesafe mode.
+
+    Precedence: VIBESAFE_ENV > .vibesafe/mode > vibesafe.toml default.
+    """
+    mode_file = Path(".vibesafe") / "mode"
+
+    if clear:
+        try:
+            mode_file.unlink()
+            console.print("[green]Cleared persisted mode (.vibesafe/mode).[/green]")
+        except FileNotFoundError:
+            console.print("[yellow].vibesafe/mode not found; nothing to clear.[/yellow]")
+
+    if value:
+        mode_file.parent.mkdir(parents=True, exist_ok=True)
+        mode_file.write_text(value)
+        console.print(f"[green]Persisted mode set to '{value}' in .vibesafe/mode.[/green]")
+
+    cfg = get_config(reload=True)
+
+    env_var = os.getenv("VIBESAFE_ENV")
+    persisted = None
+    if mode_file.exists():
+        try:
+            persisted = mode_file.read_text().strip() or None
+        except OSError:
+            persisted = None
+
+    console.print(f"VIBESAFE_ENV: {env_var or '<unset>'}")
+    console.print(f".vibesafe/mode: {persisted or '<missing>'}")
+    console.print(f"Effective mode: {cfg.project.env}")
+
+
+@main.command()
 @click.option("--target", help="Unit ID to open in the REPL")
 def repl(target: str | None) -> None:
     """Interactive compile/test loop for a vibesafe unit."""
@@ -483,7 +596,7 @@ def repl(target: str | None) -> None:
             "seed": provider_cfg.seed,
             "timeout": provider_cfg.timeout,
         }
-        template_id = unit_meta.get("template", "prompts/function.j2")
+        template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
             docstring=spec["docstring"],
@@ -583,9 +696,12 @@ def repl(target: str | None) -> None:
     _show_summary()
     _print_help()
 
+    prompt = "\n[bold cyan]repl>[/bold cyan] "
+    plain_prompt = "\nrepl> "
+
     while True:
         try:
-            raw = console.input("\n[bold cyan]repl>[/bold cyan] ")
+            raw = console.input(prompt) if isinstance(console, Console) else input(plain_prompt)
         except (KeyboardInterrupt, EOFError):
             console.print("\n[bold]Exiting REPL.[/bold]")
             break
@@ -720,7 +836,7 @@ def _import_project_modules() -> None:
         sys.path.insert(0, str(cwd))
 
     # Try common patterns
-    patterns = ["app/**/*.py", "src/**/*.py", "*.py"]
+    patterns = ["app/**/*.py", "src/**/*.py", "examples/**/*.py", "*.py"]
 
     for pattern in patterns:
         for py_file in cwd.glob(pattern):
@@ -791,7 +907,7 @@ def _detect_drift() -> tuple[int, bool]:
             "seed": provider_cfg.seed,
             "timeout": provider_cfg.timeout,
         }
-        template_id = unit_meta.get("template", "prompts/function.j2")
+        template_id = resolve_template_id(unit_meta, config, spec.get("type"))
         current_hash = compute_spec_hash(
             signature=spec["signature"],
             docstring=spec["docstring"],
@@ -809,4 +925,3 @@ def _detect_drift() -> tuple[int, bool]:
             drift_count += 1
 
     return drift_count, False
-

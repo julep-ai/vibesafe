@@ -3,8 +3,8 @@
 Demo script to show vibesafe-generated functions in action.
 """
 
-# Import the generated functions using the runtime loader
-from vibesafe.runtime import load_active
+# Import the generated functions using the public API alias
+from vibesafe import load_active
 
 multiply = load_active("test_vibesafe/multiply")
 factorial = load_active("test_vibesafe/factorial")

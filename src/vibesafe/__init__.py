@@ -6,8 +6,7 @@ with hash-locked verification and test-driven iteration.
 """
 
 from vibesafe.core import (
-    VibeHandled,
-    VibesafeHandled,
+    VibeCoded,
     get_registry,
     get_unit,
     vibesafe,
@@ -24,7 +23,7 @@ from vibesafe.exceptions import (
 from vibesafe.fastapi import mount
 from vibesafe.runtime import load_checkpoint
 
-__version__ = "0.1.0"
+__version__ = "0.2.0-pre1"
 
 # Backwards compatibility aliases (deprecated)
 func = vibesafe
@@ -37,8 +36,7 @@ __all__ = [
     "get_unit",
     "func",
     "http",
-    "VibesafeHandled",
-    "VibeHandled",
+    "VibeCoded",
     "VibesafeError",
     "VibesafeMissingDoctest",
     "VibesafeTypeError",

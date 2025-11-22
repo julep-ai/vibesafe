@@ -30,6 +30,8 @@ class SpecExtractor:
         self.source = textwrap.dedent(raw_source)
         self.tree = ast.parse(self.source)
         self.module = inspect.getmodule(func)
+        self._func_def = self._find_function_def()
+        self.inferred_type = self._infer_type()
 
     @staticmethod
     def _load_source(func: Callable[..., Any]) -> str:
@@ -174,7 +176,7 @@ class SpecExtractor:
                         body_start = i + 1
                         break
 
-        # Extract body lines before VibesafeHandled
+        # Extract body lines before VibeCoded
         body_lines = []
         sentinel_markers = {
             "pass",
@@ -186,8 +188,18 @@ class SpecExtractor:
         for i in range(body_start, len(source_lines)):
             line = source_lines[i]
             stripped = line.strip()
-            if "VibesafeHandled" in stripped or stripped in sentinel_markers:
+
+            # Stop at raise VibeCoded() or legacy VibesafeHandled
+            if (
+                "VibeCoded" in stripped
+                or "VibesafeHandled" in stripped
+                or "VibeHandled" in stripped
+            ):
                 break
+
+            if stripped in sentinel_markers:
+                break
+
             # Only include lines with actual content (strip empty/whitespace)
             if stripped:
                 body_lines.append(line)
@@ -273,6 +285,100 @@ class SpecExtractor:
 
         return dependencies
 
+    # --- Inference helpers -------------------------------------------------
+
+    def _find_function_def(self) -> ast.AST | None:
+        """Locate the AST node for the target function by name."""
+        target = self._func_obj.__name__
+
+        class _Finder(ast.NodeVisitor):
+            def __init__(self) -> None:
+                self.found: ast.AST | None = None
+
+            def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:  # type: ignore[override]
+                if node.name == target and self.found is None:
+                    self.found = node
+                self.generic_visit(node)
+
+            def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> Any:  # type: ignore[override]
+                if node.name == target and self.found is None:
+                    self.found = node
+                self.generic_visit(node)
+
+        finder = _Finder()
+        finder.visit(self.tree)
+        return finder.found
+
+    def _infer_type(self) -> str:
+        """
+        Infer the surface type of the spec from decorators.
+
+        Returns "http" if FastAPI-style route decorators are detected,
+        otherwise "function". (CLI/Typer handling deferred.)
+        """
+        if not isinstance(self._func_def, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return "function"
+
+        if self._has_fastapi_route_decorator(self._func_def):
+            return "http"
+
+        return "function"
+
+    def _has_fastapi_route_decorator(self, func_def: ast.AST) -> bool:
+        """Return True if decorator list contains a FastAPI route-like call."""
+        FASTAPI_METHODS = {
+            "get",
+            "post",
+            "put",
+            "delete",
+            "patch",
+            "options",
+            "head",
+            "route",
+            "api_route",
+            "websocket",
+        }
+
+        fastapi_imported = "fastapi" in self.source
+
+        if not fastapi_imported:
+            return False
+
+        decorators = getattr(func_def, "decorator_list", [])
+        for deco in decorators:
+            call = deco if isinstance(deco, ast.Call) else None
+            if call is None:
+                continue
+
+            dotted = self._dotted_name(call.func)
+            if not dotted:
+                continue
+
+            # Require an explicit FastAPI-ish prefix to reduce false positives.
+            if not (
+                dotted.startswith(("app.", "router.", "api_router.", "fastapi.", "api."))
+                or ".router." in dotted
+                or ".app." in dotted
+            ):
+                continue
+
+            if any(dotted.endswith(f".{method}") for method in FASTAPI_METHODS):
+                return True
+
+        return False
+
+    def _dotted_name(self, node: ast.AST) -> str | None:
+        """Convert Attribute/Name chain to dotted string."""
+        parts: list[str] = []
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if isinstance(node, ast.Name):
+            parts.append(node.id)
+        else:
+            return None
+        return ".".join(reversed(parts))
+
     def to_dict(self) -> dict[str, Any]:
         """
         Extract all spec components as a dictionary.
@@ -288,6 +394,7 @@ class SpecExtractor:
             "hypothesis_blocks": self.extract_hypothesis_blocks(),
             "dependencies": self.extract_dependencies(),
             "source": self.source,
+            "type": self.inferred_type,
         }
 
 

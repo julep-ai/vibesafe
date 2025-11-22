@@ -2,12 +2,26 @@
 Tests for vibesafe.cli module.
 """
 
-import pytest
-from click.testing import CliRunner
+from pathlib import Path
 from unittest.mock import MagicMock
 
-from vibesafe import VibesafeHandled, get_registry, get_unit, vibesafe
-from vibesafe.cli import check, compile, diff, main, repl, save, scan, status, test
+import pytest
+from click.testing import CliRunner
+
+from vibesafe import VibeCoded, __version__, get_unit, vibesafe
+from vibesafe.cli import (
+    check,
+    compile,
+    diff,
+    install_claude_plugin,
+    main,
+    mode,
+    repl,
+    save,
+    scan,
+    status,
+    test,
+)
 
 
 class TestCLI:
@@ -28,8 +42,7 @@ class TestCLI:
     def assert_console_output(self, mock_console, text):
         """Assert that the text was printed to the console."""
         output = "\n".join(
-            str(call.args[0]) if call.args else "" 
-            for call in mock_console.print.call_args_list
+            str(call.args[0]) if call.args else "" for call in mock_console.print.call_args_list
         )
         assert text in output
 
@@ -43,47 +56,58 @@ class TestCLI:
         """Test version flag."""
         result = runner.invoke(main, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert __version__ in result.output
 
-    def test_scan_no_units(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_scan_no_units(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Test scan with no units."""
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(scan)
         self.assert_console_output(mock_console, "No vibesafe units found")
 
-    def test_status_no_units(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_status_no_units(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Test status with no units registered."""
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(status)
         self.assert_console_output(mock_console, "No vibesafe units found")
 
-    def test_diff_no_units(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_diff_no_units(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Test diff with no units registered."""
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(diff)
         self.assert_console_output(mock_console, "No vibesafe units found")
 
-    def test_scan_with_units(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_scan_with_units(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Test scan with registered units."""
 
         @vibesafe
         def test_func(x: int) -> int:
             """Test."""
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(scan)
-        
+
         if result.exit_code != 0:
             with open("/home/diwank/github.com/julep-ai/vibesafe/debug_cli.txt", "w") as f:
                 f.write(f"Output: {result.output}\n")
                 f.write(f"Exception: {result.exception}\n")
                 import traceback
+
                 traceback.print_tb(result.exc_info[2], file=f)
 
         assert result.exit_code == 0
 
-    def test_compile_no_units(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_compile_no_units(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Test compile with no units."""
         monkeypatch.chdir(temp_dir)
         result = runner.invoke(compile)
@@ -130,7 +154,7 @@ class TestCLI:
         self,
         runner,
         monkeypatch,
-        clear_defless_registry,
+        clear_vibesafe_registry,
         mock_console,
     ):
         """Check command succeeds when helpers succeed."""
@@ -149,7 +173,7 @@ class TestCLI:
         runner,
         temp_dir,
         monkeypatch,
-        clear_defless_registry,
+        clear_vibesafe_registry,
         mock_console,
     ):
         """Check command only lints directories that exist."""
@@ -181,7 +205,7 @@ class TestCLI:
         runner,
         temp_dir,
         monkeypatch,
-        clear_defless_registry,
+        clear_vibesafe_registry,
         mock_console,
     ):
         """Check command skips linting when no directories exist."""
@@ -214,7 +238,9 @@ class TestCLI:
         assert result.exit_code == 0
         assert "Interactive" in result.output
 
-    def test_repl_requires_target(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_repl_requires_target(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """REPL without --target should exit with guidance."""
         monkeypatch.chdir(temp_dir)
         monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
@@ -223,7 +249,9 @@ class TestCLI:
         assert result.exit_code == 1
         self.assert_console_output(mock_console, "Specify --target")
 
-    def test_repl_unknown_unit(self, runner, temp_dir, monkeypatch, clear_defless_registry, mock_console):
+    def test_repl_unknown_unit(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
         """Unknown unit should be rejected."""
         monkeypatch.chdir(temp_dir)
         monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
@@ -240,7 +268,7 @@ class TestCLI:
         runner,
         temp_dir,
         monkeypatch,
-        clear_defless_registry,
+        clear_vibesafe_registry,
         mock_console,
     ):
         """REPL processes summary then exits on 'q'."""
@@ -256,7 +284,7 @@ class TestCLI:
             2
             """
 
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         unit_id = demo_spec.__vibesafe_unit_id__
         unit_meta = get_unit(unit_id)
@@ -268,23 +296,17 @@ class TestCLI:
         monkeypatch.setattr("vibesafe.cli.get_unit", lambda _: unit_meta)
 
         result = runner.invoke(repl, ["--target", unit_id], input="q\n")
-        
+
         if result.exit_code != 0:
             with open("/home/diwank/github.com/julep-ai/vibesafe/debug_cli.txt", "w") as f:
                 f.write(f"Output: {result.output}\n")
                 f.write(f"Exception: {result.exception}\n")
                 import traceback
+
                 traceback.print_tb(result.exc_info[2], file=f)
 
         assert result.exit_code == 0
         self.assert_console_output(mock_console, "Bye!")
-
-    def test_scan_write_shims_flag(self, runner, temp_dir, monkeypatch, mock_console):
-        """Test scan with --write-shims flag."""
-        monkeypatch.chdir(temp_dir)
-        result = runner.invoke(scan, ["--write-shims"])
-        assert result.exit_code == 0
-        self.assert_console_output(mock_console, "Shims are deprecated")
 
     def test_compile_force_flag(self, runner):
         """Test compile with --force flag."""
@@ -296,7 +318,9 @@ class TestCLI:
         result = runner.invoke(compile, ["--target", "test/unit", "--help"])
         assert result.exit_code == 0
 
-    def test_save_freeze_flag(self, runner, temp_dir, monkeypatch, clear_defless_registry, mocker, mock_console):
+    def test_save_freeze_flag(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mocker, mock_console
+    ):
         """save --freeze-http-deps triggers dependency capture."""
 
         monkeypatch.chdir(temp_dir)
@@ -309,7 +333,7 @@ class TestCLI:
             >>> example(1)
             1
             """
-            yield VibesafeHandled()
+            raise VibeCoded()
 
         unit_id = example.__vibesafe_unit_id__
 
@@ -335,3 +359,41 @@ class TestCLI:
         assert result.exit_code == 0
         assert unit_id in freeze_called.get("units", [])
         self.assert_console_output(mock_console, "Tests passed")
+
+    def test_mode_set_persists(self, runner, temp_dir, monkeypatch, mock_console):
+        """mode --value writes .vibesafe/mode."""
+        monkeypatch.chdir(temp_dir)
+        result = runner.invoke(mode, ["--value", "prod"])
+        assert result.exit_code == 0
+        mode_file = Path(temp_dir) / ".vibesafe" / "mode"
+        assert mode_file.read_text() == "prod"
+        self.assert_console_output(mock_console, "Persisted mode set to 'prod'")
+
+    def test_mode_show_reads_persisted(self, runner, temp_dir, monkeypatch, mock_console):
+        """mode (no args) reports effective mode from persisted file."""
+        monkeypatch.chdir(temp_dir)
+        mode_file = Path(temp_dir) / ".vibesafe" / "mode"
+        mode_file.parent.mkdir(parents=True, exist_ok=True)
+        mode_file.write_text("dev")
+
+        result = runner.invoke(mode)
+        assert result.exit_code == 0
+        self.assert_console_output(mock_console, "Effective mode: dev")
+
+    def test_install_claude_plugin_prints_instructions(
+        self, runner, monkeypatch, mock_console, temp_dir
+    ):
+        """install-claude-plugin should print manual instructions."""
+
+        def fake_which(prog: str):
+            if prog == "claude":
+                return "/usr/bin/claude"
+            return None
+
+        monkeypatch.setattr("vibesafe.cli.shutil.which", fake_which)
+
+        result = runner.invoke(install_claude_plugin)
+        assert result.exit_code == 0
+        self.assert_console_output(mock_console, "Manual install steps for Claude plugin")
+        self.assert_console_output(mock_console, "/plugin marketplace add julep-ai/vibesafe")
+        self.assert_console_output(mock_console, "/plugin install vibesafe@Vibesafe")

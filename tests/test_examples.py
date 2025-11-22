@@ -17,7 +17,7 @@ if str(examples_dir) not in sys.path:
 class TestMathExamples:
     """Tests for examples/math/ops.py."""
 
-    def test_sum_str_definition(self, clear_defless_registry):
+    def test_sum_str_definition(self, clear_vibesafe_registry):
         """Test sum_str function is properly defined."""
         from examples.math.ops import sum_str
 
@@ -25,21 +25,21 @@ class TestMathExamples:
         # Check kind if it's set, default is None which implies function
         assert getattr(sum_str, "__vibesafe_kind__", None) is None
 
-    def test_fibonacci_definition(self, clear_defless_registry):
+    def test_fibonacci_definition(self, clear_vibesafe_registry):
         """Test fibonacci function is properly defined."""
         from examples.math.ops import fibonacci
 
         assert hasattr(fibonacci, "__vibesafe_unit_id__")
         assert getattr(fibonacci, "__vibesafe_kind__", None) is None
 
-    def test_is_prime_definition(self, clear_defless_registry):
+    def test_is_prime_definition(self, clear_vibesafe_registry):
         """Test is_prime function is properly defined."""
         from examples.math.ops import is_prime
 
         assert hasattr(is_prime, "__vibesafe_unit_id__")
         assert getattr(is_prime, "__vibesafe_kind__", None) is None
 
-    def test_sum_str_spec(self, clear_defless_registry):
+    def test_sum_str_spec(self, clear_vibesafe_registry):
         """Test sum_str has correct spec."""
         from examples.math.ops import sum_str
         from vibesafe.ast_parser import extract_spec
@@ -50,7 +50,7 @@ class TestMathExamples:
         assert "b: str" in spec["signature"]
         assert len(spec["doctests"]) >= 2
 
-    def test_fibonacci_spec(self, clear_defless_registry):
+    def test_fibonacci_spec(self, clear_vibesafe_registry):
         """Test fibonacci has correct spec."""
         from examples.math.ops import fibonacci
         from vibesafe.ast_parser import extract_spec
@@ -60,7 +60,7 @@ class TestMathExamples:
         assert "n: int" in spec["signature"]
         assert len(spec["doctests"]) >= 3
 
-    def test_is_prime_spec(self, clear_defless_registry):
+    def test_is_prime_spec(self, clear_vibesafe_registry):
         """Test is_prime has correct spec."""
         from examples.math.ops import is_prime
         from vibesafe.ast_parser import extract_spec
@@ -76,7 +76,7 @@ class TestMathExamples:
 class TestAPIExamples:
     """Tests for examples/api/routes.py."""
 
-    def test_sum_endpoint_definition(self, clear_defless_registry):
+    def test_sum_endpoint_definition(self, clear_vibesafe_registry):
         """Test sum_endpoint is properly defined."""
         from examples.api.routes import sum_endpoint
 
@@ -85,7 +85,7 @@ class TestAPIExamples:
         assert sum_endpoint.__vibesafe_method__ == "POST"
         assert sum_endpoint.__vibesafe_path__ == "/sum"
 
-    def test_hello_endpoint_definition(self, clear_defless_registry):
+    def test_hello_endpoint_definition(self, clear_vibesafe_registry):
         """Test hello_endpoint is properly defined."""
         from examples.api.routes import hello_endpoint
 
@@ -94,7 +94,7 @@ class TestAPIExamples:
         assert hello_endpoint.__vibesafe_method__ == "GET"
         assert hello_endpoint.__vibesafe_path__ == "/hello/{name}"
 
-    def test_sum_endpoint_spec(self, clear_defless_registry):
+    def test_sum_endpoint_spec(self, clear_vibesafe_registry):
         """Test sum_endpoint has correct spec."""
         from examples.api.routes import sum_endpoint
         from vibesafe.ast_parser import extract_spec
@@ -105,7 +105,7 @@ class TestAPIExamples:
         assert "a: int" in spec["signature"]
         assert "b: int" in spec["signature"]
 
-    def test_hello_endpoint_spec(self, clear_defless_registry):
+    def test_hello_endpoint_spec(self, clear_vibesafe_registry):
         """Test hello_endpoint has correct spec."""
         from examples.api.routes import hello_endpoint
         from vibesafe.ast_parser import extract_spec

@@ -64,7 +64,7 @@ def test_checkpoint(checkpoint_dir: Path, unit_meta: dict[str, Any]) -> TestResu
     hypothesis_blocks = spec.get("hypothesis_blocks", [])
 
     unit_id = unit_meta["module"] + "/" + unit_meta["qualname"]
-    _ensure_defless_harness(unit_id, unit_meta, spec)
+    _ensure_vibesafe_harness(unit_id, unit_meta, spec)
 
     config = get_config()
     sandbox_cfg = config.sandbox
@@ -213,15 +213,15 @@ def _sanitize_unit_id(unit_id: str) -> str:
     return unit_id.replace(".", "_").replace("/", "_")
 
 
-def _ensure_defless_harness(
+def _ensure_vibesafe_harness(
     unit_id: str, unit_meta: dict[str, Any], spec: dict[str, Any]
 ) -> Path | None:
-    """Write pytest doctest/property harness under tests/defless for a unit."""
+    """Write pytest doctest/property harness under tests/vibesafe for a unit."""
 
     if not spec["doctests"] and not spec.get("hypothesis_blocks"):
         return None
 
-    dest_dir = Path.cwd() / "tests" / "defless"
+    dest_dir = Path.cwd() / "tests" / "vibesafe"
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"test_{_sanitize_unit_id(unit_id)}.py"
@@ -535,4 +535,3 @@ def run_all_tests() -> dict[str, TestResult]:
 # Prevent pytest from auto-collecting helper functions
 cast(Any, test_checkpoint).__test__ = False
 cast(Any, test_unit).__test__ = False
-

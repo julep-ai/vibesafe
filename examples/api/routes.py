@@ -2,7 +2,7 @@
 Example vibesafe HTTP endpoints.
 """
 
-from vibesafe import VibesafeHandled, vibesafe
+from vibesafe import VibeCoded, vibesafe
 
 
 @vibesafe(kind="http", method="POST", path="/sum")
@@ -18,7 +18,7 @@ async def sum_endpoint(a: int, b: int) -> dict[str, int]:
     >>> anyio.run(sum_endpoint, 10, 20)
     {'sum': 30}
     """
-    return VibesafeHandled()
+    return VibeCoded()
 
 
 @vibesafe(kind="http", method="GET", path="/hello/{name}")
@@ -32,4 +32,4 @@ async def hello_endpoint(name: str) -> dict[str, str]:
     >>> anyio.run(hello_endpoint, "Bob")
     {'message': 'Hello, Bob!'}
     """
-    return VibesafeHandled()
+    return VibeCoded()

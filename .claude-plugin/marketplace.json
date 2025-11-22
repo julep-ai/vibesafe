@@ -1,0 +1,15 @@
+{
+  "name": "Vibesafe",
+  "owner": {
+    "name": "Julep AI",
+    "email": "developers@julep.ai"
+  },
+  "description": "Vibesafe plugin repository",
+  "plugins": [
+    {
+      "name": "vibesafe",
+      "description": "Vibesafe developer tools",
+      "source": "./"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 [project]
 name = "vibesafe"
-version = "0.1.4b1"
+version = "0.2.0-pre1"
 description = "Vibe safely"
 readme = "README.md"
 authors = [
@@ -22,6 +22,7 @@ dependencies = [
 dev = [
     "poethepoet>=0.37.0",
     "ty>=0.0.1a25",
+    "mcp-use",
     "pytest>=8.0.0",
     "pytest-xdist>=3.5.0",  # Parallel test execution
     "pytest-cov>=5.0.0",     # Coverage reporting
@@ -138,6 +139,7 @@ select = [
     "SIM", # flake8-simplify
 ]
 ignore = [
+    "ARG001",
     "E501",  # line too long (handled by formatter)
     "B008",  # do not perform function calls in argument defaults
     "B905",  # zip strict parameter

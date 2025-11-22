@@ -21,9 +21,9 @@ vibe save
 `app/math/ops.py`
 
 ```python
-from vibesafe import vibesafe, VibeHandled
+from vibesafe import vibesafe, VibeCoded
 
-@vibesafe.func
+@vibesafe
 def sum_str(a: str, b: str) -> str:
     """
     Add two ints represented as strings.
@@ -32,13 +32,13 @@ def sum_str(a: str, b: str) -> str:
     '5'
     """
     a, b = int(a), int(b)
-    yield VibeHandled()  # the “hole” Vibesafe fills
+    raise VibeCoded()  # the "hole" Vibesafe fills
 ```
 
 Import generated implementation (post-compile/save):
 
 ```python
-from app.__generated__.math.ops import sum_str
+from app.math.ops import sum_str
 ```
 
 ---
@@ -49,7 +49,7 @@ from app.__generated__.math.ops import sum_str
 
 * **Spec as code**: A normal Python function with **strict types** + **doctest examples**, whose body contains a **hole** (`yield/return VibeHandled()`).
 * **Generation**: Vibesafe compiles the spec into an implementation via an LLM (OpenAI-compatible), then runs tests.
-* **Checkpointing**: Passing code is stored under a **hash**, and a tiny **shim** in `__generated__/` re-exports the active checkpoint.
+* **Checkpointing**: Passing code is stored under a **hash**; the decorator transparently loads from active checkpoints.
 * **Modes**:
 
   * **dev**: regenerate on the fly; hash mismatch → warn + auto-regenerate.
@@ -62,10 +62,7 @@ your_pkg/
   app/
     math/
       ops.py                      # specs
-    __generated__/                # tiny shims → active checkpoints
-      math/
-        ops.py
-.vibesafe/
+  .vibesafe/
   checkpoints/
     app.math.ops/sum_str/
       2d46.../
@@ -75,16 +72,15 @@ your_pkg/
   cache/                          # provider cache (gitignored)
 vibesafe.toml                     # project config
 tests/
-  defless/                        # doctest + property tests emitted here
+  vibesafe/                        # doctest + property tests emitted here
 ```
 
 > **Unit ID** = `<module.path>/<object_name>`, e.g. `app.math.ops/sum_str`.
 
 ## 3) Components
 
-* **Decorators** (`@vibesafe.func`, `@vibesafe.http`) mark specs and provide per-unit config.
+* **Decorators** (`@vibesafe` with optional `kind` parameter) mark specs and provide per-unit config.
 * **Codegen** renders a **Jinja** prompt, calls provider, validates code, writes checkpoint.
-* **Shim builder** writes `__generated__` modules that route imports to the active checkpoint.
 * **Hasher** computes `H_spec` and `H_chk` (see §10).
 * **CLI** (`vibe`) runs `scan`, `compile`, `test`, `save`, etc.
 * **Provider** is pluggable; first backend is **OpenAI-compatible**.
@@ -164,8 +160,9 @@ checkpoints = ".vibesafe/checkpoints"
 cache = ".vibesafe/cache"
 
 [prompts]
-function = "prompts/function.j2"
-http = "prompts/http_endpoint.j2"
+function = "vibesafe/templates/function.j2"
+http = "vibesafe/templates/http_endpoint.j2"
+cli = "vibesafe/templates/cli_command.j2"
 ```
 
 Per-unit overrides (decorator kwargs) take precedence over file config.
@@ -184,14 +181,77 @@ vibe repl    [--target UNIT]
 
 > **Implementation note:** The CLI is exposed as both `vibe` (alias) and `vibesafe`. You can run either `vibe scan` or `vibesafe scan`; both map to the same entrypoint in this repository.
 
-* `scan`: finds specs, reports doctest count, drift, missing shims; `--write-shims` scaffolds `__generated__/`.
-* `compile`: generates code + tests; writes checkpoint; updates shims.
+* `scan`: finds specs, reports doctest count, drift.
+* `compile`: generates code + tests; writes checkpoint.
 * `test`: runs doctests (+ props if present), type-check (pyright/mypy), lint (ruff). `--all` can delegate to your full test suite.
 * `save`: activates a checkpoint (updates `.vibesafe/index.toml`). `--freeze-http-deps` writes `requirements.vibesafe.txt` and records runtime versions in `meta.toml`.
 * `diff`: shows prompt/code diffs vs active checkpoint.
 * `repl`: interactive iteration loop (regenerate, tighten, test, split, save).
 
 **Env var**: `VIBESAFE_ENV=dev|prod` (overrides `vibesafe.toml`).
+
+---
+
+# Part II.5 — Phase 1 Implementation Status
+
+## Phase 1 Implementation (COMPLETED)
+
+### Decorator System
+
+**Implemented as:** Module-level registry with decorator functions
+
+```python
+# Global registry (module-level)
+_registry: dict[str, dict[str, Any]] = {}
+
+def get_registry() -> dict[str, dict[str, Any]]:
+    """Access global registry"""
+    return _registry
+
+def get_unit(unit_id: str) -> dict[str, Any] | None:
+    """Retrieve specific unit by ID"""
+    return _registry.get(unit_id)
+
+def resolve_template_id(unit_id: str) -> str:
+    """Resolve template ID for a unit"""
+    unit = get_unit(unit_id)
+    return unit.get("template_id", "function") if unit else "function"
+```
+
+**Decision:** Chose module-level approach over class-based `VibesafeDecorator` for simplicity and to avoid singleton patterns. The registry is populated at import time when decorators are applied.
+
+### Import Shims (DEPRECATED v0.2)
+
+~~`__generated__/` directory with import shims~~
+
+**Status:** Deprecated. Direct runtime loading is now preferred.
+
+**Reason:** Shims added complexity without clear benefit. Runtime loading via decorator or explicit `load_active()` is simpler and more direct.
+
+**Migration:** Change imports from:
+```python
+from app.__generated__.math.ops import sum_str  # OLD
+```
+to:
+```python
+from app.math.ops import sum_str  # NEW
+```
+
+### CLI Commands
+
+#### `vibesafe scan`
+- Lists all registered units
+- ~~`--write-shims` flag (deprecated v0.2)~~
+- Shows checkpoint status and doctest coverage
+
+#### `vibesafe compile`
+- ~~No longer writes shims automatically~~
+- Generates code and writes checkpoints
+- `--force` flag to override existing checkpoints
+
+### Template Resolution
+
+**Added:** `resolve_template_id()` helper function for programmatic template resolution, complementing the existing decorator-based template selection.
 
 ---
 
@@ -217,8 +277,7 @@ vibesafe/
     codegen.py                # render prompt, provider call, validate, write checkpoint
     validate.py               # AST/name/signature checks, sanity checks
   runtime/
-    loader.py                 # load_active(unit_id) for shims
-    shims.py                  # __generated__ builder
+    loader.py                 # load_active(unit_id)
     checkpoints.py            # index read/write, meta schema
   testkit/
     doctest_gen.py            # extract -> pytest wrappers
@@ -258,7 +317,7 @@ created = "2025-10-29T09:43:12Z"
 ```toml
 spec_sha = "5a72..."
 chk_sha  = "2d46..."
-defless_compat = "0.1"                # internal schema version if needed
+vibesafe_compat = "0.1"                # internal schema version if needed
 vibesafe_version = "0.1.0"
 provider = "openai-compatible:gpt-4o-mini"
 prompt_template = "function.j2"
@@ -283,7 +342,7 @@ pydantic = "2.9.1"
 
 ## 9) Prompting & templates
 
-* **Jinja** templates live at `prompts/function.j2`, `prompts/http_endpoint.j2`.
+* **Jinja** templates live at `vibesafe/templates/function.j2`, `vibesafe/templates/http_endpoint.j2`, `vibesafe/templates/cli_command.j2`.
 * Context available to templates:
 
   ```python
@@ -352,21 +411,13 @@ H_chk = sha256( H_spec || prompt_render_sha || generated_code_sha )
    * check same name/signature
    * ensure imports compile
    * (optional) basic safety scan
-6. **Write checkpoint**:
+ 6. **Write checkpoint**:
 
-   * `.vibesafe/checkpoints/<unit>/<H_chk>/impl.py`
-   * `meta.toml`
-7. **Build shim**:
+    * `.vibesafe/checkpoints/<unit>/<H_chk>/impl.py`
+    * `meta.toml`
+ 7. **Run tests**:
 
-   * `your_pkg/__generated__/.../module.py`:
-
-     ```python
-     from vibesafe.runtime import load_active
-     sum_str = load_active("app.math.ops/sum_str")
-     ```
-8. **Run tests**:
-
-   * build pytest doctest wrappers in `tests/defless/`
+   * build pytest doctest wrappers in `tests/vibesafe/`
    * run pyright/mypy + ruff
 9. **Activate**:
 
@@ -376,7 +427,7 @@ H_chk = sha256( H_spec || prompt_render_sha || generated_code_sha )
 
 ### 12.1 Doctests → pytest conversion
 
-* Generate a file per unit: `tests/defless/test_app_math_ops_sum_str.py`.
+* Generate a file per unit: `tests/vibesafe/test_app_math_ops_sum_str.py`.
 * Harness can run these in isolation (`vibe test`) or with the full suite (`--all`).
 
 ### 12.2 Property-based (Phase 2)
@@ -490,7 +541,6 @@ In dev mode, simply calling a spec function will trigger generation if missing o
 
 **Commit these**
 
-* `your_pkg/__generated__/...` shims (tiny, stable)
 * `.vibesafe/index.toml` (diff-friendly)
 * `.vibesafe/checkpoints/**/meta.toml`
 * Optionally: **include** `impl.py` files for fully offline prod deploys (recommended). If your
@@ -509,7 +559,7 @@ In dev mode, simply calling a spec function will trigger generation if missing o
 
 * Set `VIBESAFE_ENV=prod`.
 * Do **not** ship provider credentials (prod doesn’t generate).
-* Ensure `.vibesafe/checkpoints` and `__generated__` are present in the artifact.
+* Ensure `.vibesafe/checkpoints` are present in the artifact.
 
 ---
 
@@ -536,7 +586,7 @@ class Provider(Protocol):
 
 ## 21) Template overrides
 
-* Put custom Jinja under `prompts/`.
+* Put custom Jinja under `vibesafe/templates/` (or point `prompts.*` to your own path).
 * Set paths in `vibesafe.toml` or pass `prompt=` to a decorator for one-off overrides.
 
 ## 22) Sandbox (optional, Phase 2)
@@ -556,7 +606,7 @@ memory_mb = 256
 
 ## 23) Common commands
 
-* `vibe scan --write-shims`
+* `vibe scan`
 * `vibe compile --target app.math.ops`
 * `vibe test --target app.math.ops/sum_str`
 * `vibe save --freeze-http-deps`
@@ -583,7 +633,7 @@ memory_mb = 256
 
 1. `api.decorators`, `api.sentinel`
 2. `core.spec`, `core.prompts`, `providers.openai_compat`
-3. `core.codegen`, `runtime.checkpoints`, `runtime.loader`, `runtime.shims`
+3. `core.codegen`, `runtime.checkpoints`, `runtime.loader`
 4. `testkit.doctest_gen`, `testkit.gates`
 5. `cli.*` (`scan`, `compile`, `test`, `save`)
 6. Hashing + tracer MVP

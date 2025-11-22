@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 import vibesafe.core as vibesafe_core
-from vibesafe import VibesafeHandled, vibesafe
+from vibesafe import VibeCoded, vibesafe
 from vibesafe.config import VibesafeConfig, get_config
 
 # Tell pytest not to collect test_checkpoint and test_unit from vibesafe.testing
@@ -58,8 +58,9 @@ index = ".vibesafe/index.toml"
 generated = "__generated__"
 
 [prompts]
-function = "prompts/function.j2"
-http = "prompts/http_endpoint.j2"
+function = "vibesafe/templates/function.j2"
+http = "vibesafe/templates/http_endpoint.j2"
+cli = "vibesafe/templates/cli_command.j2"
 
 [sandbox]
 enabled = false
@@ -93,7 +94,7 @@ def sample_function() -> Callable[..., Any]:
         >>> add_numbers(10, 20)
         30
         """
-        yield VibesafeHandled()
+        raise VibeCoded()
 
     return add_numbers
 
@@ -111,7 +112,7 @@ def sample_async_function() -> Callable[..., Any]:
         >>> anyio.run(test_endpoint, 5)
         {'result': 5}
         """
-        return VibesafeHandled()
+        return VibeCoded()
 
     return test_endpoint
 
@@ -196,16 +197,16 @@ text = '''Add two numbers.'''
 
 
 @pytest.fixture
-def clear_defless_registry():
+def clear_vibesafe_registry():
     """Clear vibesafe registry between tests."""
     # Ensure default example modules are registered once so the baseline registry matches docs
-    if not getattr(clear_defless_registry, "_seeded", False):
+    if not getattr(clear_vibesafe_registry, "_seeded", False):
         try:
             for module in ("examples.math.ops", "examples.api.routes"):
                 importlib.import_module(module)
         except ImportError:
-            pass # Examples might not be in path during tests
-        clear_defless_registry._seeded = True
+            pass  # Examples might not be in path during tests
+        clear_vibesafe_registry._seeded = True
 
     # Store original registry
     original = vibesafe_core._registry.copy()

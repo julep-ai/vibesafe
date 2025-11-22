@@ -42,7 +42,9 @@ class TestLoadCheckpoint:
         with pytest.raises(VibesafeCheckpointMissing, match="No active checkpoint"):
             load_checkpoint("test/unit")
 
-    def test_load_checkpoint_missing_checkpoint_dir_raises(self, test_config, temp_dir, monkeypatch):
+    def test_load_checkpoint_missing_checkpoint_dir_raises(
+        self, test_config, temp_dir, monkeypatch
+    ):
         """Test loading with missing checkpoint directory raises error."""
         index_path = temp_dir / ".vibesafe" / "index.toml"
         index_path.parent.mkdir(parents=True)
