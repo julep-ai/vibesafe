@@ -1,7 +1,7 @@
 ---
 name: vibesafe
 description: "Uses the Vibesafe MCP server to scan, compile, test, save, diff, and report status for Vibesafe units. Activate when the user asks to run vibesafe CLI commands (scan/compile/test/save/diff/status), regenerate code from specs, or inspect drift/checkpoints."
-version: "0.2.0rc2"
+version: "0.2.0"
 tags: ["vibesafe", "codegen", "mcp", "cli"]
 allowed-tools: "MCP(vibesafe:*)"
 ---

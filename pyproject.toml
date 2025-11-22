@@ -1,6 +1,6 @@
 [project]
 name = "vibesafe"
-version = "0.2.0rc2"
+version = "0.2.0"
 description = "Vibe safely"
 readme = "README.md"
 authors = [

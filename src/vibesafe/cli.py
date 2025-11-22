@@ -10,6 +10,7 @@ from typing import cast
 
 import click
 from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from vibesafe import __version__
@@ -111,6 +112,60 @@ def scan() -> None:
 
 
 @main.command()
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite an existing vibesafe.toml if present.",
+)
+def init(force: bool) -> None:
+    """
+    Initialize a project with a minimal vibesafe.toml and local folders.
+    """
+
+    config_path = Path("vibesafe.toml")
+    if config_path.exists() and not force:
+        console.print("[red]vibesafe.toml already exists; rerun with --force to overwrite.[/red]")
+        sys.exit(1)
+
+    # Minimal, temperature-free defaults
+    config_content = """\
+[project]
+python = ">=3.12"
+env = "dev"
+
+[provider.default]
+kind = "openai-compatible"
+model = "gpt-5-mini"
+seed = 42
+reasoning_effort = "medium"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+timeout = 60
+
+[paths]
+checkpoints = ".vibesafe/checkpoints"
+cache = ".vibesafe/cache"
+index = ".vibesafe/index.toml"
+generated = "__generated__"
+
+[sandbox]
+enabled = false
+timeout = 10
+memory_mb = 256
+"""
+
+    config_path.write_text(config_content)
+    Path(".vibesafe/checkpoints").mkdir(parents=True, exist_ok=True)
+    Path(".vibesafe/cache").mkdir(parents=True, exist_ok=True)
+
+    console.print(f"[green]✓ Created {config_path}[/green]")
+    console.print("[green]✓ Prepared .vibesafe/ directories[/green]")
+    console.print(
+        "Next: set OPENAI_API_KEY and run `vibe scan` / `vibe compile` to generate implementations."
+    )
+
+
+@main.command()
 @click.option("--target", help="Specific unit ID or module to compile")
 @click.option("--force", is_flag=True, help="Force recompilation even if checkpoint exists")
 @click.option(
@@ -120,7 +175,14 @@ def scan() -> None:
     show_default=False,
     help="Number of parallel workers (default: CPU cores - 2, minimum 1).",
 )
-def compile(target: str | None, force: bool, workers: int | None) -> None:
+@click.option(
+    "--max-iterations",
+    type=click.IntRange(1, 10),
+    default=2,
+    show_default=True,
+    help="Max LLM regeneration attempts per unit when tests/gates fail.",
+)
+def compile(target: str | None, force: bool, workers: int | None, max_iterations: int) -> None:
     """
     Generate code for vibesafe units.
 
@@ -161,30 +223,106 @@ def compile(target: str | None, force: bool, workers: int | None) -> None:
 
     registry_snapshot = registry  # local ref for worker closure
 
-    def _compile_unit(unit_id: str) -> tuple[str, dict | None, object | None, list[str]]:
+    def _compile_unit(
+        unit_id: str, progress: Progress | None, task_id: int | None
+    ) -> tuple[str, dict | None, object | None, list[str]]:
         """Return (unit_id, checkpoint_info, test_result, errors)."""
-        try:
-            checkpoint_info = generate_for_unit(unit_id, force=force)
-            unit_meta = registry_snapshot[unit_id]
-            test_result = test_checkpoint(checkpoint_info["checkpoint_dir"], unit_meta)
-            errors: list[str] = []
-            if not test_result.passed:
-                errors = test_result.errors
-            return unit_id, checkpoint_info, test_result, errors
-        except Exception as exc:  # pragma: no cover - provider/environment failures
-            return unit_id, None, None, [str(exc)]
+        unit_meta = registry_snapshot[unit_id]
+
+        checkpoint_info: dict[str, object] | None = None
+        test_result: object | None = None
+        errors: list[str] = []
+
+        for attempt in range(1, max_iterations + 1):
+            try:
+                if progress and task_id is not None:
+                    progress.update(
+                        task_id,
+                        description=f"[cyan]{unit_id}[/cyan] gen (try {attempt}/{max_iterations})",
+                    )
+                checkpoint_info = generate_for_unit(
+                    unit_id,
+                    force=(force or attempt > 1),
+                    feedback="\n".join(errors) if errors else None,
+                )
+                if progress and task_id is not None:
+                    progress.update(
+                        task_id,
+                        description=f"[cyan]{unit_id}[/cyan] test (try {attempt}/{max_iterations})",
+                    )
+
+                test_result = test_checkpoint(checkpoint_info["checkpoint_dir"], unit_meta)
+                errors = []
+                if not test_result.passed:
+                    errors = test_result.errors
+                    continue  # retry
+
+                # success
+                if progress and task_id is not None:
+                    progress.update(
+                        task_id, description=f"[green]{unit_id}[/green] ✓", completed=True
+                    )
+                return unit_id, checkpoint_info, test_result, errors
+
+            except Exception as exc:  # pragma: no cover - provider/environment failures
+                errors = [str(exc)]
+                # Retry if attempts remain; otherwise exit loop
+                if attempt == max_iterations:
+                    if progress and task_id is not None:
+                        progress.update(
+                            task_id, description=f"[red]{unit_id}[/red] error", completed=True
+                        )
+                    return unit_id, None, None, errors
+
+        # Exhausted attempts with errors
+        if progress and task_id is not None:
+            progress.update(task_id, description=f"[red]{unit_id}[/red] failed", completed=True)
+        return unit_id, checkpoint_info, test_result, errors
 
     results: list[tuple[str, dict | None, object | None, list[str]]] = []
 
-    if worker_count == 1 or len(units_to_compile) == 1:
-        for uid in units_to_compile:
-            results.append(_compile_unit(uid))
-    else:
-        max_workers = min(worker_count, len(units_to_compile))
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_map = {executor.submit(_compile_unit, uid): uid for uid in units_to_compile}
-            for future in as_completed(future_map):
-                results.append(future.result())
+    use_progress = isinstance(console, Console)
+    progress: Progress | None = None
+
+    if use_progress:
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("{task.description}"),
+            TimeElapsedColumn(),
+            console=console,
+            transient=True,
+        )
+
+    def _run_compile() -> None:
+        if progress is None:
+            # Fallback without rich progress (e.g., in tests)
+            for uid in units_to_compile:
+                results.append(_compile_unit(uid, None, None))
+            return
+
+        with progress:
+            task_ids = {
+                uid: progress.add_task(f"[cyan]{uid}[/cyan]: queued", total=None)
+                for uid in units_to_compile
+            }
+
+            if worker_count == 1 or len(units_to_compile) == 1:
+                for uid in units_to_compile:
+                    results.append(_compile_unit(uid, progress, task_ids[uid]))
+                    progress.update(task_ids[uid], completed=True)
+            else:
+                max_workers = min(worker_count, len(units_to_compile))
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    future_map = {
+                        executor.submit(_compile_unit, uid, progress, task_ids[uid]): uid
+                        for uid in units_to_compile
+                    }
+                    for future in as_completed(future_map):
+                        uid = future_map[future]
+                        results.append(future.result())
+                        progress.update(task_ids[uid], completed=True)
+
+    _run_compile()
 
     # Process results in submission order to keep output deterministic for the user.
     order = {uid: idx for idx, uid in enumerate(units_to_compile)}
@@ -466,7 +604,8 @@ def check() -> None:
     lint_targets = [Path("src"), Path("tests"), Path("examples")]
     available_lint_targets = [str(target) for target in lint_targets if target.exists()]
     if available_lint_targets:
-        if not _run_command(["ruff", "check", *available_lint_targets]):
+        ruff_cmd = ["ruff", "check", "--fix", "--unsafe-fixes", *available_lint_targets]
+        if not _run_command(ruff_cmd):
             overall_success = False
     else:
         console.print("  [yellow]No lint targets found; skipping.[/yellow]")

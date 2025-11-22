@@ -13,6 +13,7 @@ from vibesafe.cli import (
     check,
     compile,
     diff,
+    init,
     install_claude_plugin,
     main,
     mode,
@@ -203,6 +204,40 @@ def add(x: int, y: int) -> int:
         assert set(compiled) == {"unit.a", "unit.b"}
         assert set(indexed) == {"unit.a", "unit.b"}
 
+    def test_init_writes_config_and_dirs(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
+        """Init should create vibesafe.toml and .vibesafe dirs."""
+
+        monkeypatch.chdir(temp_dir)
+        result = runner.invoke(init)
+
+        assert result.exit_code == 0
+        cfg = temp_dir / "vibesafe.toml"
+        assert cfg.exists()
+        text = cfg.read_text()
+        assert "gpt-5-mini" in text
+        assert "reasoning_effort" in text
+        assert (temp_dir / ".vibesafe/cache").is_dir()
+        self.assert_console_output(mock_console, "Created vibesafe.toml")
+
+    def test_init_respects_force(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
+        """Init should refuse overwrite unless --force is provided."""
+
+        monkeypatch.chdir(temp_dir)
+        cfg = temp_dir / "vibesafe.toml"
+        cfg.write_text("existing")
+
+        result = runner.invoke(init)
+        assert result.exit_code == 1
+        self.assert_console_output(mock_console, "already exists")
+
+        result_force = runner.invoke(init, ["--force"])
+        assert result_force.exit_code == 0
+        assert "gpt-5-mini" in cfg.read_text()
+
     def test_test_help(self, runner):
         """Test test command help."""
         result = runner.invoke(test, ["--help"])
@@ -279,7 +314,7 @@ def add(x: int, y: int) -> int:
         result = runner.invoke(check)
 
         assert result.exit_code == 0
-        assert commands == [["ruff", "check", "src"]]
+        assert commands == [["ruff", "check", "--fix", "--unsafe-fixes", "src"]]
         self.assert_console_output(mock_console, "No mypy target found")
         self.assert_console_output(mock_console, "Check complete")
 
