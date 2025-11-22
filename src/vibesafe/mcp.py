@@ -78,7 +78,7 @@ class MCPServer:
 
     def send_response(self, request_id: Any, result: Any) -> None:
         """Send a JSON-RPC response."""
-        response = {
+        response: dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": request_id,
             "result": result,
@@ -88,7 +88,7 @@ class MCPServer:
 
     def send_error(self, request_id: Any, code: int, message: str, data: Any = None) -> None:
         """Send a JSON-RPC error."""
-        response = {
+        response: dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": request_id,
             "error": {
@@ -96,7 +96,7 @@ class MCPServer:
                 "message": message,
             },
         }
-        if data:
+        if data is not None:
             response["error"]["data"] = data
         print(json.dumps(response))
         sys.stdout.flush()
