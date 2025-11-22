@@ -28,39 +28,81 @@ class TestOpenAICompatibleProvider:
         """Test completion with mocked OpenAI client."""
         config = ProviderConfig()
 
-        # Mock OpenAI client
+        # Mock Responses client
         mock_client = mocker.MagicMock()
         mock_response = mocker.MagicMock()
-        mock_response.choices = [mocker.MagicMock()]
-        mock_response.choices[0].message.content = "Generated code"
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_response.output_text = "Generated code"
+        mock_response.id = "resp_123"
+        mock_client.responses.create.return_value = mock_response
 
         provider = OpenAICompatibleProvider(config, "test-key")
         provider.client = mock_client
 
         result = provider.complete(prompt="Test prompt", seed=42)
         assert result == "Generated code"
-        mock_client.chat.completions.create.assert_called_once()
+        mock_client.responses.create.assert_called_once()
 
     def test_complete_calls_with_correct_params(self, mocker):
-        """Test that complete calls API with correct parameters."""
-        config = ProviderConfig(model="gpt-4", temperature=0.5, seed=100)
+        """Test that complete calls API with correct parameters (Responses path)."""
+        config = ProviderConfig(model="gpt-4", seed=100)
 
         mock_client = mocker.MagicMock()
         mock_response = mocker.MagicMock()
-        mock_response.choices = [mocker.MagicMock()]
-        mock_response.choices[0].message.content = "result"
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_response.output_text = "result"
+        mock_client.responses.create.return_value = mock_response
 
         provider = OpenAICompatibleProvider(config, "test-key")
         provider.client = mock_client
 
         provider.complete(prompt="Test", seed=42)
 
-        call_args = mock_client.chat.completions.create.call_args
+        call_args = mock_client.responses.create.call_args
         assert call_args[1]["model"] == "gpt-4"
-        assert call_args[1]["temperature"] == 0.5
-        assert call_args[1]["seed"] == 42
+        assert call_args[1]["input"] == [{"role": "user", "content": "Test"}]
+
+    def test_complete_has_no_temperature_param(self, mocker):
+        """Provider should omit temperature entirely (Responses path)."""
+        config = ProviderConfig(model="gpt-4", seed=100)
+
+        mock_client = mocker.MagicMock()
+        mock_response = mocker.MagicMock()
+        mock_response.output_text = "result"
+        mock_client.responses.create.return_value = mock_response
+
+        provider = OpenAICompatibleProvider(config, "test-key")
+        provider.client = mock_client
+
+        provider.complete(prompt="Test", seed=9)
+
+        call_args = mock_client.responses.create.call_args
+        assert "temperature" not in call_args[1]
+
+    def test_openrouter_path_uses_extra_body(self, mocker):
+        """OpenRouter base_url should send extra_body reasoning block."""
+
+        config = ProviderConfig(
+            base_url="https://openrouter.ai/api/v1",
+            reasoning_effort="medium",
+        )
+
+        mock_client = mocker.MagicMock()
+        mock_resp = mocker.MagicMock()
+        mock_choice = mocker.MagicMock()
+        mock_choice.message.content = "ok"
+        mock_choice.message.reasoning_details = {"foo": "bar"}
+        mock_resp.choices = [mock_choice]
+        mock_resp.id = "or_123"
+        mock_client.chat.completions.create.return_value = mock_resp
+
+        provider = OpenAICompatibleProvider(config, "test-key")
+        provider.client = mock_client
+
+        provider.complete(prompt="Hi", seed=1)
+
+        call_args = mock_client.chat.completions.create.call_args
+        assert call_args[1]["extra_body"] == {"reasoning": {"enabled": True, "effort": "medium"}}
+        assert provider.last_metadata.response_id == "or_123"
+        assert provider.last_metadata.reasoning_details == {"foo": "bar"}
 
 
 class TestCachedProvider:
@@ -102,19 +144,20 @@ class TestCachedProvider:
         assert result2 == "First result"  # Should be cached
         assert base_provider.complete.call_count == 1  # No new calls
 
-    def test_same_spec_hash_different_prompt_hits_cache(self, temp_dir: Path, mocker):
-        """Different prompts with same spec_hash reuse cache entry."""
+    def test_prompt_change_busts_cache_even_with_same_spec_hash(self, temp_dir: Path, mocker):
+        """Feedback retries change prompt hash so provider is called again."""
+
         base_provider = mocker.MagicMock()
-        base_provider.complete.return_value = "Result"
+        base_provider.complete.side_effect = ["Attempt 1", "Attempt 2"]
 
         cached = CachedProvider(base_provider, temp_dir)
 
-        result1 = cached.complete(prompt="Prompt 1", seed=42, spec_hash="spec123")
-        result2 = cached.complete(prompt="Prompt 2", seed=42, spec_hash="spec123")
+        first = cached.complete(prompt="Prompt 1", seed=42, spec_hash="spec123")
+        second = cached.complete(prompt="Prompt 2", seed=42, spec_hash="spec123")
 
-        assert result1 == "Result"
-        assert result2 == "Result"
-        assert base_provider.complete.call_count == 1
+        assert first == "Attempt 1"
+        assert second == "Attempt 2"
+        assert base_provider.complete.call_count == 2
 
     def test_different_spec_hashes_different_cache(self, temp_dir: Path, mocker):
         """Different spec hashes should create distinct cache entries."""

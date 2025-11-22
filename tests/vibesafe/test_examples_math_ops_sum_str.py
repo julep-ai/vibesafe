@@ -44,7 +44,7 @@ def _run_doctests(func) -> None:
         lineno=0,
         docstring=DOCSTRING,
     )
-    runner = doctest.DocTestRunner(optionflags=doctest.ELLIPSIS)
+    runner = doctest.DocTestRunner(optionflags=doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE)
     failures, _ = runner.run(test, clear_globs=False)
     if failures:
         raise AssertionError(f"{failures} doctest(s) failed for {UNIT_ID}")

@@ -151,7 +151,6 @@ kind = "openai-compatible"
 base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
 model = "gpt-4o-mini"
-temperature = 0
 seed = 42
 max_tokens = 4096
 
@@ -331,7 +330,6 @@ pre_hole_sha = "..."
 template_id = "function"
 model = "gpt-4o-mini"
 seed = 42
-temperature = 0
 dependency_digest = "..."
 
 [deps]                                   # filled when --freeze-http-deps

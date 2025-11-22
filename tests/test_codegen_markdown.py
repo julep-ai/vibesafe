@@ -150,7 +150,9 @@ def complex_func(a: int, b: str) -> dict:
         ):
             # Setup mock config
             mock_cfg = Mock()
-            mock_cfg.get_provider.return_value = Mock(model="test-model", seed=42, temperature=0.0)
+            mock_cfg.get_provider.return_value = Mock(
+                model="test-model", seed=42, timeout=60, reasoning_effort=None
+            )
             mock_config.return_value = mock_cfg
 
             # Setup mock spec

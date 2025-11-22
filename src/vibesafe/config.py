@@ -12,7 +12,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ProviderConfig(BaseModel):
@@ -20,11 +20,31 @@ class ProviderConfig(BaseModel):
 
     kind: str = "openai-compatible"
     model: str = "gpt-5-mini"
-    temperature: float = 0.0
     seed: int = 42
     base_url: str = "https://api.openai.com/v1"
     api_key_env: str = "OPENAI_API_KEY"
     timeout: int = 60
+    reasoning_effort: str | None = None
+
+    @model_validator(mode="after")
+    def normalize_reasoning_effort(self) -> "ProviderConfig":
+        """
+        Normalize reasoning_effort to accepted values or None.
+
+        Allowed: minimal, low, medium, high, none
+        """
+        if self.reasoning_effort is None:
+            return self
+
+        value = self.reasoning_effort.lower().strip()
+        allowed = {"minimal", "low", "medium", "high", "none"}
+        if value not in allowed:
+            raise ValueError(
+                f"Invalid reasoning_effort '{self.reasoning_effort}'. "
+                f"Allowed: {', '.join(sorted(allowed))}"
+            )
+        self.reasoning_effort = value
+        return self
 
 
 class PathsConfig(BaseModel):

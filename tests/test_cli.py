@@ -13,6 +13,7 @@ from vibesafe.cli import (
     check,
     compile,
     diff,
+    init,
     install_claude_plugin,
     main,
     mode,
@@ -105,6 +106,35 @@ class TestCLI:
 
         assert result.exit_code == 0
 
+    def test_scan_discovers_packages_outside_src(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
+        """Scan should find units in arbitrary packages (e.g., playground apps)."""
+
+        pkg = temp_dir / "calculator"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "engine.py").write_text(
+            '''from vibesafe import VibeCoded, vibesafe
+
+
+@vibesafe
+def add(x: int, y: int) -> int:
+    """Add two numbers.
+
+    >>> add(1, 2)
+    3
+    """
+    raise VibeCoded()
+'''
+        )
+
+        monkeypatch.chdir(temp_dir)
+        result = runner.invoke(scan)
+
+        assert result.exit_code == 0
+        self.assert_console_output(mock_console, "Total units:")
+
     def test_compile_no_units(
         self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
     ):
@@ -119,6 +149,95 @@ class TestCLI:
         result = runner.invoke(compile, ["--help"])
         assert result.exit_code == 0
         assert "compile" in result.output.lower()
+        assert "--workers" in result.output
+        assert "--max-iterations" in result.output
+
+    def test_compile_workers_parallel(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
+        """Compile should accept workers>1 and still succeed."""
+
+        # Fake registry with two units
+        def dummy():  # pragma: no cover - used only as marker
+            return None
+
+        registry = {
+            "unit.a": {"func": dummy, "type": "function"},
+            "unit.b": {"func": dummy, "type": "function"},
+        }
+
+        compiled: list[str] = []
+        indexed: list[str] = []
+
+        def fake_generate(unit_id: str, force: bool, **kwargs):
+            compiled.append(unit_id)
+            chk_dir = temp_dir / unit_id.replace(".", "/") / "hash1234567890abcd"
+            chk_dir.mkdir(parents=True, exist_ok=True)
+            (chk_dir / "impl.py").write_text("def f():\n    return 1\n")
+            return {
+                "spec_hash": "hash1234",
+                "checkpoint_dir": chk_dir,
+                "created_at": "now",
+            }
+
+        def fake_test_checkpoint(chk_dir, unit_meta):
+            class Result:
+                passed = True
+                total = 1
+                failures = 0
+                errors: list[str] = []
+
+            return Result()
+
+        def fake_update_index(unit_id, spec_hash, created=None):
+            indexed.append(unit_id)
+
+        monkeypatch.chdir(temp_dir)
+        monkeypatch.setattr("vibesafe.cli._import_project_modules", lambda: None)
+        monkeypatch.setattr("vibesafe.cli.get_registry", lambda: registry)
+        monkeypatch.setattr("vibesafe.cli.generate_for_unit", fake_generate)
+        monkeypatch.setattr("vibesafe.testing.test_checkpoint", fake_test_checkpoint)
+        monkeypatch.setattr("vibesafe.cli.update_index", fake_update_index)
+
+        result = runner.invoke(compile, ["--workers", "2"])
+
+        assert result.exit_code == 0
+        assert set(compiled) == {"unit.a", "unit.b"}
+        assert set(indexed) == {"unit.a", "unit.b"}
+
+    def test_init_writes_config_and_dirs(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
+        """Init should create vibesafe.toml and .vibesafe dirs."""
+
+        monkeypatch.chdir(temp_dir)
+        result = runner.invoke(init)
+
+        assert result.exit_code == 0
+        cfg = temp_dir / "vibesafe.toml"
+        assert cfg.exists()
+        text = cfg.read_text()
+        assert "gpt-5-mini" in text
+        assert "reasoning_effort" in text
+        assert (temp_dir / ".vibesafe/cache").is_dir()
+        self.assert_console_output(mock_console, "Created vibesafe.toml")
+
+    def test_init_respects_force(
+        self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console
+    ):
+        """Init should refuse overwrite unless --force is provided."""
+
+        monkeypatch.chdir(temp_dir)
+        cfg = temp_dir / "vibesafe.toml"
+        cfg.write_text("existing")
+
+        result = runner.invoke(init)
+        assert result.exit_code == 1
+        self.assert_console_output(mock_console, "already exists")
+
+        result_force = runner.invoke(init, ["--force"])
+        assert result_force.exit_code == 0
+        assert "gpt-5-mini" in cfg.read_text()
 
     def test_test_help(self, runner):
         """Test test command help."""
@@ -196,7 +315,7 @@ class TestCLI:
         result = runner.invoke(check)
 
         assert result.exit_code == 0
-        assert commands == [["ruff", "check", "src"]]
+        assert commands == [["ruff", "check", "--fix", "--unsafe-fixes", "src"]]
         self.assert_console_output(mock_console, "No mypy target found")
         self.assert_console_output(mock_console, "Check complete")
 

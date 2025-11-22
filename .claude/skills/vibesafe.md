@@ -31,7 +31,6 @@ env = "dev"  # or "prod"
 [provider.default]
 kind = "openai-compatible"
 model = "gpt-4o-mini"
-temperature = 0.0
 seed = 42
 base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
@@ -1218,7 +1217,6 @@ memory_mb = 256      # Memory limit
 [provider.default]
 kind = "openai-compatible"
 model = "gpt-4o-mini"
-temperature = 0.0
 seed = 42
 base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
@@ -1226,7 +1224,6 @@ api_key_env = "OPENAI_API_KEY"
 [provider.claude]
 kind = "openai-compatible"
 model = "claude-3-5-sonnet-20241022"
-temperature = 0.0
 seed = 42
 base_url = "https://api.anthropic.com/v1"
 api_key_env = "ANTHROPIC_API_KEY"
@@ -1234,7 +1231,6 @@ api_key_env = "ANTHROPIC_API_KEY"
 [provider.local]
 kind = "openai-compatible"
 model = "llama-3-70b"
-temperature = 0.0
 base_url = "http://localhost:8000/v1"
 api_key_env = "LOCAL_API_KEY"
 ```
@@ -1270,7 +1266,6 @@ env = "dev"
 [provider.default]
 kind = "openai-compatible"
 model = "gpt-4o-mini"
-temperature = 0.0
 seed = 42
 base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"

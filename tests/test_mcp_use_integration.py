@@ -6,7 +6,11 @@ import json
 import sys
 
 import pytest
-from mcp_use import MCPClient
+
+try:  # pragma: no cover - environment-dependent optional dependency
+    from mcp_use import MCPClient
+except Exception as exc:  # ImportError or dependency errors
+    pytest.skip(f"mcp_use not available: {exc}", allow_module_level=True)
 
 
 @pytest.mark.integration

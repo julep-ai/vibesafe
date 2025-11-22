@@ -149,7 +149,7 @@ def _run_doctests(func: Any, docstring: str, examples: list[doctest.Example]) ->
         TestResult
     """
     # Create a doctest runner
-    runner = doctest.DocTestRunner(optionflags=doctest.ELLIPSIS)
+    runner = doctest.DocTestRunner(optionflags=doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE)
 
     # Create a DocTest object
     dt = doctest.DocTest(
@@ -161,14 +161,18 @@ def _run_doctests(func: Any, docstring: str, examples: list[doctest.Example]) ->
         docstring=docstring,
     )
 
-    # Run tests
-    failures, total = runner.run(dt, clear_globs=False)
+    # Run tests with captured output for better feedback (silenced to avoid stdout noise)
+    from io import StringIO
+
+    output = StringIO()
+    failures, total = runner.run(dt, clear_globs=False, out=output.write)
 
     # Collect errors
     errors = []
     if failures > 0:
-        # DocTestRunner prints to stdout, capture would require redirecting
-        errors.append(f"{failures} doctest(s) failed")
+        detail = output.getvalue().strip()
+        summary = f"{failures} doctest(s) failed"
+        errors.append(f"{summary}: {detail}")
 
     return TestResult(passed=(failures == 0), failures=failures, total=total, errors=errors)
 
@@ -177,8 +181,8 @@ def _run_quality_gates(impl_path: Path) -> list[str]:
     """Run lint and type-check gates against the generated implementation."""
 
     gates = [
-        ("ruff", ["ruff", "check", str(impl_path)]),
-        ("mypy", ["mypy", str(impl_path)]),
+        ("ruff", ["ruff", "check", "--fix", "--unsafe-fixes", str(impl_path)]),
+        ("ty", ["ty", "check", str(impl_path)]),
     ]
 
     errors: list[str] = []

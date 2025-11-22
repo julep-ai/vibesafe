@@ -25,24 +25,33 @@ class TestProviderConfig:
         config = ProviderConfig()
         assert config.kind == "openai-compatible"
         assert config.model == "gpt-5-mini"
-        assert config.temperature == 0.0
         assert config.seed == 42
         assert config.timeout == 60
+        assert config.reasoning_effort is None
 
     def test_custom_values(self):
         """Test provider config with custom values."""
         config = ProviderConfig(
             kind="custom",
             model="gpt-4",
-            temperature=0.5,
+            reasoning_effort="medium",
             seed=100,
             timeout=120,
         )
         assert config.kind == "custom"
         assert config.model == "gpt-4"
-        assert config.temperature == 0.5
+        assert config.reasoning_effort == "medium"
         assert config.seed == 100
         assert config.timeout == 120
+
+    def test_reasoning_effort_normalization(self):
+        """Reasoning effort accepts allowed values (case-insensitive)."""
+        cfg = ProviderConfig(model="gpt-4", reasoning_effort="High")
+        assert cfg.reasoning_effort == "high"
+
+    def test_reasoning_effort_invalid_raises(self):
+        with pytest.raises(ValueError):
+            ProviderConfig(model="gpt-4", reasoning_effort="extreme")
 
 
 class TestPathsConfig:
