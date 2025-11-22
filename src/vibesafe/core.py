@@ -286,6 +286,8 @@ def _compute_spec_hash(unit_id: str, spec_meta: dict[str, Any]) -> str:
         "seed": provider_config.seed,
         "timeout": provider_config.timeout,
     }
+    if provider_config.reasoning_effort:
+        provider_params["reasoning_effort"] = provider_config.reasoning_effort
 
     return compute_spec_hash(
         signature=spec_meta.get("signature", ""),

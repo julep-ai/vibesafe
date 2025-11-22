@@ -178,7 +178,7 @@ memory_mb = 256
 @click.option(
     "--max-iterations",
     type=click.IntRange(1, 10),
-    default=2,
+    default=4,
     show_default=True,
     help="Max LLM regeneration attempts per unit when tests/gates fail.",
 )

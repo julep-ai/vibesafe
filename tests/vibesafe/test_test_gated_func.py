@@ -1,11 +1,10 @@
 """Auto-generated doctest harness for test/gated_func."""
 
 import doctest
-
 from vibesafe.runtime import load_checkpoint
 
-UNIT_ID = "test/gated_func"
-FUNC_NAME = "gated_func"
+UNIT_ID = 'test/gated_func'
+FUNC_NAME = 'gated_func'
 DOCSTRING = "Example with doctest.\n\n>>> gated_func(1)\n1"
 PROPERTY_SRC = ""
 

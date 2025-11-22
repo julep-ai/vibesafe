@@ -79,14 +79,23 @@ class CachedProvider:
     def _compute_cache_key(
         self, prompt: str, seed: int, kwargs: dict[str, str | int | float]
     ) -> str:
-        """Compute cache key from inputs."""
+        """Compute cache key from inputs.
+
+        The prompt hash is always included so retries with feedback (changed
+        prompt text) don't reuse a stale completion. The spec hash still
+        participates to keep cache entries scoped to a spec version.
+        """
+
         spec_hash = kwargs.pop("spec_hash", None)
+        prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+
+        key_parts = []
         if spec_hash:
-            key_data = f"{spec_hash}\n{seed}\n{json.dumps(kwargs, sort_keys=True)}"
-        else:
-            prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
-            key_data = f"{prompt_hash}\n{seed}\n{json.dumps(kwargs, sort_keys=True)}"
-        return hashlib.sha256(key_data.encode()).hexdigest()[:16]
+            key_parts.append(spec_hash)
+
+        key_parts.extend([prompt_hash, str(seed), json.dumps(kwargs, sort_keys=True)])
+
+        return hashlib.sha256("\n".join(key_parts).encode()).hexdigest()[:16]
 
     def complete(self, *, prompt: str, seed: int, **kwargs: str | int | float) -> str:
         """

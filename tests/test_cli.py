@@ -149,7 +149,8 @@ def add(x: int, y: int) -> int:
         result = runner.invoke(compile, ["--help"])
         assert result.exit_code == 0
         assert "compile" in result.output.lower()
-        assert "CPU cores - 2" in result.output
+        assert "--workers" in result.output
+        assert "--max-iterations" in result.output
 
     def test_compile_workers_parallel(
         self, runner, temp_dir, monkeypatch, clear_vibesafe_registry, mock_console

@@ -119,19 +119,22 @@ class TestCachedProvider:
         assert result2 == "First result"  # Should be cached
         assert base_provider.complete.call_count == 1  # No new calls
 
-    def test_same_spec_hash_different_prompt_hits_cache(self, temp_dir: Path, mocker):
-        """Different prompts with same spec_hash reuse cache entry."""
+    def test_prompt_change_busts_cache_even_with_same_spec_hash(
+        self, temp_dir: Path, mocker
+    ):
+        """Feedback retries change prompt hash so provider is called again."""
+
         base_provider = mocker.MagicMock()
-        base_provider.complete.return_value = "Result"
+        base_provider.complete.side_effect = ["Attempt 1", "Attempt 2"]
 
         cached = CachedProvider(base_provider, temp_dir)
 
-        result1 = cached.complete(prompt="Prompt 1", seed=42, spec_hash="spec123")
-        result2 = cached.complete(prompt="Prompt 2", seed=42, spec_hash="spec123")
+        first = cached.complete(prompt="Prompt 1", seed=42, spec_hash="spec123")
+        second = cached.complete(prompt="Prompt 2", seed=42, spec_hash="spec123")
 
-        assert result1 == "Result"
-        assert result2 == "Result"
-        assert base_provider.complete.call_count == 1
+        assert first == "Attempt 1"
+        assert second == "Attempt 2"
+        assert base_provider.complete.call_count == 2
 
     def test_different_spec_hashes_different_cache(self, temp_dir: Path, mocker):
         """Different spec hashes should create distinct cache entries."""
