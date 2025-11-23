@@ -11,7 +11,7 @@ from typing import cast
 
 import click
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from vibesafe import __version__
@@ -235,7 +235,7 @@ def compile(
     registry_snapshot = registry  # local ref for worker closure
 
     def _compile_unit(
-        unit_id: str, progress: Progress | None, task_id: int | None, debug_mode: bool
+        unit_id: str, progress: Progress | None, task_id: TaskID | None, debug_mode: bool
     ) -> tuple[str, dict | None, object | None, list[str], float]:
         """Return (unit_id, checkpoint_info, test_result, errors, duration)."""
         unit_meta = registry_snapshot[unit_id]
@@ -251,7 +251,7 @@ def compile(
             try:
                 if progress and task_id is not None:
                     progress.update(
-                        task_id,
+                        cast(TaskID, task_id),
                         description=f"[cyan]{unit_id}[/cyan] gen (try {attempt}/{max_iterations})",
                     )
                 checkpoint_info = generate_for_unit(
@@ -286,7 +286,7 @@ def compile(
                 )
                 if progress and task_id is not None:
                     progress.update(
-                        task_id,
+                        cast(TaskID, task_id),
                         description=f"[cyan]{unit_id}[/cyan] test (try {attempt}/{max_iterations})",
                     )
 
@@ -299,7 +299,9 @@ def compile(
                 # success
                 if progress and task_id is not None:
                     progress.update(
-                        task_id, description=f"[green]{unit_id}[/green] ✓", completed=True
+                        cast(TaskID, task_id),
+                        description=f"[green]{unit_id}[/green] ✓",
+                        completed=True,
                     )
                 duration = time.perf_counter() - start
                 return unit_id, checkpoint_info, test_result, errors, duration
@@ -310,14 +312,20 @@ def compile(
                 if attempt == max_iterations:
                     if progress and task_id is not None:
                         progress.update(
-                            task_id, description=f"[red]{unit_id}[/red] error", completed=True
+                            cast(TaskID, task_id),
+                            description=f"[red]{unit_id}[/red] error",
+                            completed=True,
                         )
                     duration = time.perf_counter() - start
                     return unit_id, None, None, errors, duration
 
         # Exhausted attempts with errors
         if progress and task_id is not None:
-            progress.update(task_id, description=f"[red]{unit_id}[/red] failed", completed=True)
+            progress.update(
+                cast(TaskID, task_id),
+                description=f"[red]{unit_id}[/red] failed",
+                completed=True,
+            )
         duration = time.perf_counter() - start
         return unit_id, checkpoint_info, test_result, errors, duration
 
@@ -343,7 +351,7 @@ def compile(
             return
 
         with progress:
-            task_ids = {
+            task_ids: dict[str, TaskID] = {
                 uid: progress.add_task(f"[cyan]{uid}[/cyan]: queued", total=None)
                 for uid in units_to_compile
             }
@@ -351,7 +359,7 @@ def compile(
             if worker_count == 1 or len(units_to_compile) == 1:
                 for uid in units_to_compile:
                     results.append(_compile_unit(uid, progress, task_ids[uid], debug))
-                    progress.update(task_ids[uid], completed=True)
+                    progress.update(cast(TaskID, task_ids[uid]), completed=True)
                     progress.stop_task(task_ids[uid])
             else:
                 with ThreadPoolExecutor(max_workers=worker_count) as executor:
@@ -362,7 +370,7 @@ def compile(
                     for future in as_completed(future_map):
                         uid = future_map[future]
                         results.append(future.result())
-                        progress.update(task_ids[uid], completed=True)
+                        progress.update(cast(TaskID, task_ids[uid]), completed=True)
                         progress.stop_task(task_ids[uid])
 
     _run_compile()
