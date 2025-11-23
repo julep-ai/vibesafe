@@ -188,7 +188,9 @@ def doc_func(msg: str) -> str:
         monkeypatch.setattr("vibesafe.testing._run_quality_gates", lambda path: [])
 
         unit_id = unit_meta["module"] + "/" + unit_meta["qualname"]
-        harness_path = temp_dir / "tests" / "vibesafe" / f"test_{unit_meta['module'].replace('.', '_')}.py"
+        harness_path = (
+            temp_dir / "tests" / "vibesafe" / f"test_{unit_meta['module'].replace('.', '_')}.py"
+        )
         result = test_checkpoint(checkpoint_dir, unit_meta)
 
         assert harness_path.exists()

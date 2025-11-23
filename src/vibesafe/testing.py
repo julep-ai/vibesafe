@@ -302,7 +302,7 @@ def _write_module_harness(module_name: str) -> Path:
             runner = doctest.DocTestRunner(optionflags=doctest.ELLIPSIS)
             failures, _ = runner.run(test, clear_globs=False)
             if failures:
-                raise AssertionError(f"{{{{failures}}}} doctest(s) failed for {{{{unit_id}}}}")
+                raise AssertionError(f"{{failures}} doctest(s) failed for {{unit_id}}")
 
 
         def _exec_properties(unit_id: str, func, meta) -> None:

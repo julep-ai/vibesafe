@@ -68,8 +68,6 @@ class OpenAICompatibleProvider:
         reasoning_details = kwargs.pop("reasoning_details", None)
         kwargs.pop("spec_hash", None)
         service_tier = kwargs.pop("service_tier", self.config.service_tier)
-        if isinstance(service_tier, str):
-            service_tier = service_tier.strip() or None
 
         is_openrouter = "openrouter.ai" in self.config.base_url
 
