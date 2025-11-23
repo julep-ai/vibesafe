@@ -122,6 +122,7 @@ cat > vibesafe.toml <<EOF
 [provider.default]
 kind = "openai-compatible"
 model = "gpt-4o-mini"
+service_tier = "auto"  # optional: auto|default|premium (provider-dependent)
 api_key_env = "OPENAI_API_KEY"
 EOF
 
@@ -229,7 +230,7 @@ vibesafe compile --target examples.math.ops/sum_str --force
 **What happens during compilation:**
 1. AST parser extracts signature, docstring, pre-hole code
 2. Spec hash computed from signature + doctests + model config
-3. Prompt rendered via Jinja2 template (`vibesafe/templates/function.j2`)
+3. Prompt rendered via Jinja2 template (`vibesafe/templates/function.j2` packaged in the library)
 4. LLM generates implementation (cached by spec hash)
 5. Generated code validated (correct signature, compiles, no obvious errors)
 6. Checkpoint written to `.vibesafe/checkpoints/<unit>/<hash>/`
@@ -249,6 +250,7 @@ vibesafe test --target examples.math.ops/sum_str  # Test one unit
 - ✅ Type checking via mypy
 - ✅ Linting via ruff
 - ⏭️ Hypothesis property tests (if `hypothesis:` fence in docstring)
+- ✅ In prod, an aggregated pytest harness per source module is materialized from doctests to expand coverage
 
 **Test output example:**
 
@@ -375,6 +377,7 @@ kind = "openai-compatible"
 model = "gpt-4o-mini"    # Model name
 seed = 42                # Random seed for reproducibility
 reasoning_effort = "medium"      # optional: minimal|low|medium|high
+service_tier = "auto"    # optional: pass through to provider tiering
 base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"  # Environment variable name
 timeout = 60             # Request timeout (seconds)
@@ -407,7 +410,7 @@ memory_mb = 256          # Memory limit (not enforced yet)
  )
  def your_function(...) -> ...:
      """
-     Docstring must include at least one doctest.
+     Docstring should include doctests; missing examples emit a warning.
  
      >>> your_function(...)
      expected_output

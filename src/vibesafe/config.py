@@ -25,6 +25,7 @@ class ProviderConfig(BaseModel):
     api_key_env: str = "OPENAI_API_KEY"
     timeout: int = 60
     reasoning_effort: str | None = None
+    service_tier: str | None = None
 
     @model_validator(mode="after")
     def normalize_reasoning_effort(self) -> "ProviderConfig":
@@ -46,6 +47,19 @@ class ProviderConfig(BaseModel):
         self.reasoning_effort = value
         return self
 
+    @model_validator(mode="after")
+    def normalize_service_tier(self) -> "ProviderConfig":
+        """
+        Normalize service_tier to a lowercase token without enforcing a fixed enum so
+        providers can expose new tiers without breaking configuration parsing.
+        """
+
+        if self.service_tier is None:
+            return self
+
+        self.service_tier = self.service_tier.strip().lower() or None
+        return self
+
 
 class PathsConfig(BaseModel):
     """Path configuration."""
@@ -59,9 +73,9 @@ class PathsConfig(BaseModel):
 class PromptsConfig(BaseModel):
     """Prompt template paths."""
 
-    function: str = "prompts/function.j2"
-    http: str = "prompts/http_endpoint.j2"
-    cli: str = "prompts/cli_command.j2"
+    function: str = "vibesafe/templates/function.j2"
+    http: str = "vibesafe/templates/http_endpoint.j2"
+    cli: str = "vibesafe/templates/cli_command.j2"
 
 
 class ProjectConfig(BaseModel):

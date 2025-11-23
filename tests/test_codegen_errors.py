@@ -4,19 +4,15 @@ import pytest
 
 from vibesafe import VibeCoded, get_unit, vibesafe
 from vibesafe.codegen import CodeGenerator
-from vibesafe.exceptions import (
-    VibesafeMissingDoctest,
-    VibesafeProviderError,
-    VibesafeValidationError,
-)
+from vibesafe.exceptions import VibesafeProviderError, VibesafeValidationError
 
 
 @pytest.mark.usefixtures("clear_vibesafe_registry")
 class TestCodegenErrors:
     """Ensure CodeGenerator raises SPEC-aligned exceptions."""
 
-    def test_missing_doctest_error(self, test_config, temp_dir, monkeypatch, mocker):
-        """Generating a unit without doctests should raise VibesafeMissingDoctest."""
+    def test_missing_doctest_warns(self, test_config, temp_dir, monkeypatch, mocker):
+        """Generating a unit without doctests should warn but still proceed."""
         self._prepare_config(monkeypatch, test_config, temp_dir)
 
         @vibesafe
@@ -27,12 +23,18 @@ class TestCodegenErrors:
         unit_id = no_doctest.__vibesafe_unit_id__
         unit_meta = get_unit(unit_id)
 
-        mocker.patch("vibesafe.codegen.get_provider")
+        provider = mocker.MagicMock()
+        provider.complete.return_value = "def no_doctest(x: int) -> int:\n    return x"
+        mocker.patch("vibesafe.codegen.get_provider", return_value=provider)
 
         generator = CodeGenerator(unit_id, unit_meta)
+        mocker.patch.object(generator, "_render_prompt", return_value="prompt")
 
-        with pytest.raises(VibesafeMissingDoctest):
-            generator.generate()
+        with pytest.warns(RuntimeWarning, match="does not declare any doctests"):
+            checkpoint_info = generator.generate(force=True)
+
+        assert checkpoint_info["spec_hash"]
+        provider.complete.assert_called_once()
 
     def test_provider_error_wrapped(self, test_config, temp_dir, monkeypatch, mocker):
         """Provider failures are wrapped in VibesafeProviderError."""

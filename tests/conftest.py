@@ -46,6 +46,7 @@ env = "dev"
 kind = "openai-compatible"
 model = "gpt-4o-mini"
 seed = 42
+service_tier = "auto"
 base_url = "https://api.openai.com/v1"
 api_key_env = "TEST_API_KEY"
 timeout = 60
@@ -180,7 +181,7 @@ def sample_meta(checkpoint_dir: Path) -> Path:
 spec_sha = "abc123def456"
 chk_sha = "def456ghi789"
 prompt_sha = "ghi789jkl012"
-vibesafe_version = "0.1.0"
+vibesafe_version = "0.2.1"
 provider = "openai-compatible:gpt-4o-mini"
 template = "function.j2"
 

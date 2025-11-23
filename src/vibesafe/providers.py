@@ -67,6 +67,7 @@ class OpenAICompatibleProvider:
         previous_response_id = kwargs.pop("previous_response_id", None)
         reasoning_details = kwargs.pop("reasoning_details", None)
         kwargs.pop("spec_hash", None)
+        service_tier = kwargs.pop("service_tier", self.config.service_tier)
 
         is_openrouter = "openrouter.ai" in self.config.base_url
 
@@ -112,6 +113,7 @@ class OpenAICompatibleProvider:
             input=[{"role": "user", "content": prompt}],
             reasoning=reasoning,
             previous_response_id=previous_response_id,
+            service_tier=service_tier,
             **kwargs,  # type: ignore[arg-type]
         )
 

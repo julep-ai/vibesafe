@@ -288,6 +288,8 @@ def _compute_spec_hash(unit_id: str, spec_meta: dict[str, Any]) -> str:
     }
     if provider_config.reasoning_effort:
         provider_params["reasoning_effort"] = provider_config.reasoning_effort
+    if provider_config.service_tier:
+        provider_params["service_tier"] = provider_config.service_tier
 
     return compute_spec_hash(
         signature=spec_meta.get("signature", ""),

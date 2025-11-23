@@ -23,7 +23,7 @@ from vibesafe.exceptions import (
 from vibesafe.fastapi import mount
 from vibesafe.runtime import load_checkpoint
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 # Backwards compatibility aliases (deprecated)
 func = vibesafe
