@@ -182,21 +182,19 @@ def doc_func(msg: str) -> str:
             "qualname": doc_func.__qualname__,
         }
 
+        # Aggregated harnesses only materialize in prod mode
+        test_config.project.env = "prod"
+
         monkeypatch.setattr("vibesafe.testing._run_quality_gates", lambda path: [])
 
         unit_id = unit_meta["module"] + "/" + unit_meta["qualname"]
-        harness_path = (
-            temp_dir
-            / "tests"
-            / "vibesafe"
-            / f"test_{unit_id.replace('.', '_').replace('/', '_')}.py"
-        )
+        harness_path = temp_dir / "tests" / "vibesafe" / f"test_{unit_meta['module'].replace('.', '_')}.py"
         result = test_checkpoint(checkpoint_dir, unit_meta)
 
         assert harness_path.exists()
         contents = harness_path.read_text()
         assert unit_id in contents
-        assert "'hi'" in contents
+        assert "hi" in contents
 
         from importlib.util import find_spec
 

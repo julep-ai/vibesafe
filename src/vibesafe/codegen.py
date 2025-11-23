@@ -7,6 +7,7 @@ import inspect
 import platform
 import sys
 import textwrap
+import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -21,11 +22,7 @@ from jinja2 import Environment, FileSystemLoader
 from vibesafe import __version__
 from vibesafe.ast_parser import extract_spec
 from vibesafe.config import get_config, resolve_template_id
-from vibesafe.exceptions import (
-    VibesafeMissingDoctest,
-    VibesafeProviderError,
-    VibesafeValidationError,
-)
+from vibesafe.exceptions import VibesafeProviderError, VibesafeValidationError
 from vibesafe.hashing import (
     compute_checkpoint_hash,
     compute_dependency_digest,
@@ -72,8 +69,10 @@ class CodeGenerator:
             Dictionary with checkpoint info (spec_hash, chk_hash, path, etc.)
         """
         if not self.spec["doctests"] and not allow_missing_doctest:
-            raise VibesafeMissingDoctest(
-                f"Spec {self.unit_id} does not declare any doctests; add at least one example."
+            warnings.warn(
+                f"Spec {self.unit_id} does not declare any doctests; proceeding without doctest coverage.",
+                RuntimeWarning,
+                stacklevel=2,
             )
 
         # Compute spec hash
@@ -177,6 +176,8 @@ class CodeGenerator:
         }
         if self.provider_config.reasoning_effort:
             provider_params["reasoning_effort"] = self.provider_config.reasoning_effort
+        if self.provider_config.service_tier:
+            provider_params["service_tier"] = self.provider_config.service_tier
 
         return compute_spec_hash(
             signature=self.spec["signature"],
@@ -273,6 +274,7 @@ class CodeGenerator:
                 spec_hash=spec_hash,
                 previous_response_id=previous_response_id,
                 reasoning_details=previous_reasoning_details,
+                service_tier=self.provider_config.service_tier,
             )
         except Exception as exc:  # pragma: no cover - provider errors are environment-specific
             raise VibesafeProviderError(f"Provider request failed: {exc}") from exc

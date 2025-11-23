@@ -2,6 +2,7 @@
 
 import doctest
 import importlib.util
+import inspect
 import json
 import os
 import subprocess
@@ -217,87 +218,111 @@ def _sanitize_unit_id(unit_id: str) -> str:
     return unit_id.replace(".", "_").replace("/", "_")
 
 
+_MODULE_TEST_SPECS: dict[str, dict[str, Any]] = {}
+
+
 def _ensure_vibesafe_harness(
     unit_id: str, unit_meta: dict[str, Any], spec: dict[str, Any]
 ) -> Path | None:
-    """Write pytest doctest/property harness under tests/vibesafe for a unit."""
+    """Write aggregated pytest harness per source module.
+
+    - Only materializes in production mode.
+    - Groups multiple units from the same module into a single test file.
+    - Expands doctest examples into pytest cases while preserving property blocks.
+    """
+
+    config = get_config()
+    if config.project.env != "prod":
+        return None
 
     if not spec["doctests"] and not spec.get("hypothesis_blocks"):
         return None
 
+    module_name = unit_meta.get("module") or "unknown_module"
+    module_entry = _MODULE_TEST_SPECS.setdefault(module_name, {})
+
+    module_entry[unit_id] = {
+        "func_name": unit_meta["qualname"].split(".")[-1],
+        "docstring": spec.get("docstring", ""),
+        "properties": "\n\n".join(spec.get("hypothesis_blocks", [])),
+        "source_path": inspect.getsourcefile(unit_meta["func"]) or module_name.replace(".", "/"),
+    }
+
+    return _write_module_harness(module_name)
+
+
+def _write_module_harness(module_name: str) -> Path:
     dest_dir = Path.cwd() / "tests" / "vibesafe"
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"test_{_sanitize_unit_id(unit_id)}.py"
+    filename = f"test_{module_name.replace('.', '_')}.py"
     harness_path = dest_dir / filename
 
-    func_name = unit_meta["qualname"].split(".")[-1]
-    docstring = spec["docstring"] or ""
-    doc_literal = json.dumps(docstring, ensure_ascii=False, indent=4)
-    property_src = "\n\n".join(spec.get("hypothesis_blocks", []))
-    property_literal = json.dumps(property_src, ensure_ascii=False)
+    cases = _MODULE_TEST_SPECS.get(module_name, {})
+    cases_literal = json.dumps(cases, ensure_ascii=False, indent=4)
 
     harness = (
         textwrap.dedent(
-            f"""\
-        \"\"\"Auto-generated doctest harness for {unit_id}.\"\"\"
+            f'''
+        """Auto-generated doctest/property harness for module {module_name}."""
 
         import doctest
+        import json
+        import pytest
         from vibesafe.runtime import load_checkpoint
 
-        UNIT_ID = {unit_id!r}
-        FUNC_NAME = {func_name!r}
-        DOCSTRING = {doc_literal}
-        PROPERTY_SRC = {property_literal}
+        MODULE_CASES = json.loads({cases_literal!r})
 
 
-        def _exec_properties(func) -> None:
-            if not PROPERTY_SRC:
-                return
-            namespace = {{
-                "load_checkpoint": load_checkpoint,
-                "UNIT_ID": UNIT_ID,
-                "FUNC_NAME": FUNC_NAME,
-                "func": func,
-            }}
-            exec(PROPERTY_SRC, namespace)
-            for value in list(namespace.values()):
-                if callable(value) and hasattr(value, "hypothesis"):
-                    value()
+        @pytest.mark.parametrize("unit_id", list(MODULE_CASES.keys()))
+        def test_doctests_and_properties(unit_id: str) -> None:
+            meta = MODULE_CASES[unit_id]
+            func = load_checkpoint(unit_id)
+
+            _run_doctests(unit_id, func, meta)
+            _exec_properties(unit_id, func, meta)
 
 
-        def _run_doctests(func) -> None:
-            if not DOCSTRING:
+        def _run_doctests(unit_id: str, func, meta) -> None:
+            docstring = meta.get("docstring", "")
+            if not docstring:
                 return
             parser = doctest.DocTestParser()
-            examples = parser.get_examples(DOCSTRING)
+            examples = parser.get_examples(docstring)
             if not examples:
                 return
             test = doctest.DocTest(
                 examples=examples,
-                globs={{FUNC_NAME: func}},
-                name=UNIT_ID,
-                filename="<generated>",
+                globs={{meta.get("func_name", "func"): func}},
+                name=unit_id,
+                filename=meta.get("source_path", "<generated>"),
                 lineno=0,
-                docstring=DOCSTRING,
+                docstring=docstring,
             )
             runner = doctest.DocTestRunner(optionflags=doctest.ELLIPSIS)
             failures, _ = runner.run(test, clear_globs=False)
             if failures:
-                raise AssertionError(f"{{failures}} doctest(s) failed for {{UNIT_ID}}")
+                raise AssertionError(f"{{{{failures}}}} doctest(s) failed for {{{{unit_id}}}}")
 
 
-        def test_doctests() -> None:
-            func = load_checkpoint(UNIT_ID)
-            _run_doctests(func)
-            _exec_properties(func)
-        """
+        def _exec_properties(unit_id: str, func, meta) -> None:
+            prop_src = meta.get("properties") or ""
+            if not prop_src:
+                return
+            namespace = {{
+                "load_checkpoint": load_checkpoint,
+                "UNIT_ID": unit_id,
+                "FUNC_NAME": meta.get("func_name", "func"),
+                "func": func,
+            }}
+            exec(prop_src, namespace)
+            for value in list(namespace.values()):
+                if callable(value) and hasattr(value, "hypothesis"):
+                    value()
+        '''
         ).strip()
         + "\n"
     )
-
-    if harness_path.exists() and harness_path.read_text() == harness:
-        return harness_path
 
     harness_path.write_text(harness)
     return harness_path

@@ -9,6 +9,7 @@ kind = "openai-compatible"
 model = "gpt-5-mini"
 seed = 42
 reasoning_effort = "medium"
+service_tier = "auto"
 base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
 timeout = 60
