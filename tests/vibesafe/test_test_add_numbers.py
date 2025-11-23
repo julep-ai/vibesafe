@@ -1,11 +1,7 @@
 """Auto-generated doctest harness for test/add_numbers."""
 
 import doctest
-import warnings
 
-import pytest
-
-from vibesafe.exceptions import VibesafeCheckpointMissing
 from vibesafe.runtime import load_checkpoint
 
 UNIT_ID = "test/add_numbers"
@@ -50,15 +46,15 @@ def _run_doctests(func) -> None:
         raise AssertionError(f"{failures} doctest(s) failed for {UNIT_ID}")
 
 
-def _load_or_skip():
-    try:
-        return load_checkpoint(UNIT_ID)
-    except VibesafeCheckpointMissing as exc:
-        warnings.warn(f"Skipping {UNIT_ID}: {exc}", RuntimeWarning, stacklevel=2)
-        pytest.skip(f"Checkpoint missing for {UNIT_ID}: {exc}")
-
-
 def test_doctests() -> None:
-    func = _load_or_skip()
+    import pytest
+
+    from vibesafe.exceptions import VibesafeCheckpointMissing
+
+    try:
+        func = load_checkpoint(UNIT_ID)
+    except VibesafeCheckpointMissing:
+        pytest.skip(f"Checkpoint for {UNIT_ID} missing; skipping tests.")
+
     _run_doctests(func)
     _exec_properties(func)

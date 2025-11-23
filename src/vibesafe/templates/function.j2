@@ -1,32 +1,70 @@
-You are an expert Python developer. Your task is to implement the following function based on its signature, docstring, and doctests.
+You are a Python code generator for the Vibesafe system. Your task is to implement a function based on the specification provided.
 
-Context:
-- This function is part of a larger codebase.
-- You must strictly adhere to the type hints.
-- You must pass all provided doctests.
+## Function Specification
 
-Function Signature:
+**Signature:**
+```python
 {{ signature }}
+```
 
-Docstring:
-\"\"\"
+**Documentation:**
+```
 {{ docstring }}
-\"\"\"
+```
+
+**Pre-implementation code (spec setup):**
+```python
+{{ body_before_handled }}
+```
+
+## File Context
+**Module:** `{{ module_name }}`
+**File:** `{{ file_path }}`
 
 {% if dependencies %}
-Dependencies:
+## Context
 The following helper functions/variables are available in the scope:
 {% for name, dep in dependencies.items() %}
-# From {{ dep.path }}
+### `{{ name }}`
+```python
 {{ dep.source }}
+```
 {% endfor %}
 {% endif %}
 
-Instructions:
-1. Return ONLY the Python code for the function implementation.
-2. Do NOT wrap the code in markdown blocks (e.g. ```python ... ```).
-3. Do NOT include the docstring in your implementation (it is already defined in the spec).
-4. Do NOT import any external libraries unless absolutely necessary and standard (like `math`, `json`).
-5. Ensure the implementation passes the doctests provided in the docstring.
+## Requirements
 
-Implementation:
+1. **Implement the complete function** with the EXACT signature shown above - preserve ALL type hints including generic parameters (e.g., `dict[str, int]`, not just `dict`)
+2. **Pass all doctest examples** provided in the documentation
+3. **Follow Python best practices** and type hints
+4. **Use the pre-implementation code** as setup/context if provided
+5. **Write clean, efficient, readable code**
+6. **Handle edge cases** appropriately
+7. **Do not add extra dependencies** unless absolutely necessary
+8. When the documentation references a well-known format or utility (e.g., "cowsay"), reproduce the canonical structure (including ASCII art or formatting) while adapting it to the spec requirements.
+
+## Doctest Examples
+
+The implementation MUST pass these examples:
+{% for example in doctests %}
+```python
+{{ example.source }}
+Expected: {{ example.want }}
+```
+{% endfor %}
+
+## Output Format
+
+Provide the output in the following format:
+
+## Reasoning
+Briefly explain your approach, any edge cases you considered, and how you will ensure the doctests pass.
+
+## Implementation
+```python
+{{ signature }}:
+    # Implementation here
+    pass
+```
+
+Do not include any text after the code block.

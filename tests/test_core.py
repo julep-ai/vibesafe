@@ -361,6 +361,37 @@ class TestVibesafeCore:
         assert result == "regen:boo"
         assert generate_calls == [(False, None)]
 
+    def test_spec_hash_includes_reasoning_effort(self, clear_vibesafe_registry, monkeypatch):
+        """Spec hash must include reasoning_effort to stay in sync with codegen."""
+
+        @vibesafe
+        def rhash(x: int) -> int:
+            """Doc."""
+            raise VibeCoded()
+
+        unit_id = rhash.__vibesafe_unit_id__
+        unit_meta = get_unit(unit_id)
+
+        from vibesafe import config as config_module
+        from vibesafe.ast_parser import extract_spec
+        from vibesafe.config import VibesafeConfig
+        from vibesafe.core import _compute_spec_hash
+
+        spec_meta = extract_spec(unit_meta["func"])
+
+        cfg = VibesafeConfig.load(config_path=None)
+        cfg.provider["default"].reasoning_effort = "high"
+        monkeypatch.setattr(config_module, "_config", cfg)
+
+        hash_with = _compute_spec_hash(unit_id, spec_meta)
+
+        cfg.provider["default"].reasoning_effort = None
+        monkeypatch.setattr(config_module, "_config", cfg)
+
+        hash_without = _compute_spec_hash(unit_id, spec_meta)
+
+        assert hash_with != hash_without
+
     def test_auto_generate_retries_with_feedback(self, clear_vibesafe_registry, monkeypatch):
         """Quality gate failures feed back into a second generation attempt."""
 

@@ -373,8 +373,8 @@ env = "dev"              # "dev" or "prod" (overridden by VIBESAFE_ENV)
 [provider.default]
 kind = "openai-compatible"
 model = "gpt-4o-mini"    # Model name
-temperature = 0.0        # Sampling temperature (0 = deterministic)
 seed = 42                # Random seed for reproducibility
+reasoning_effort = "medium"      # optional: minimal|low|medium|high
 base_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"  # Environment variable name
 timeout = 60             # Request timeout (seconds)

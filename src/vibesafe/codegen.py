@@ -58,6 +58,9 @@ class CodeGenerator:
         force: bool = False,
         allow_missing_doctest: bool = False,
         feedback: str | None = None,
+        previous_response_id: str | None = None,
+        previous_reasoning_details: dict | None = None,
+        debug: bool = False,
     ) -> dict[str, Any]:
         """
         Generate implementation for this unit.
@@ -82,23 +85,82 @@ class CodeGenerator:
             # Load existing checkpoint
             return self._load_checkpoint_meta(checkpoint_dir)
 
-        # Render prompt
-        prompt = self._render_prompt()
-        if feedback:
-            prompt = f"{prompt}\n\n# Feedback from previous attempt\n{feedback}\n"
-        prompt_hash = compute_prompt_hash(prompt)
+        # Render prompt base
+        base_prompt = self._render_prompt()
+        last_prompt: str | None = None
 
-        # Call LLM
-        generated_code = self._generate_code(prompt, spec_hash)
-        self._validate_generated_code(generated_code)
+        # Retry loop for validation errors (e.g. SyntaxError)
+        max_retries = 3
+        current_feedback = feedback
 
-        # Compute checkpoint hash
-        chk_hash = compute_checkpoint_hash(spec_hash, prompt_hash, generated_code)
+        for attempt in range(max_retries + 1):
+            # Construct prompt with feedback
+            prompt = base_prompt
+            if current_feedback:
+                prompt = (
+                    f"{base_prompt}\n\n---\nPrevious attempt failed with:\n{current_feedback}\n"
+                    "Please fix the issues above and output only the corrected implementation."
+                )
 
-        # Save checkpoint
-        checkpoint_info = self._save_checkpoint(spec_hash, chk_hash, prompt_hash, generated_code)
+            last_prompt = prompt
+            prompt_hash = compute_prompt_hash(prompt)
 
-        return checkpoint_info
+            try:
+                # Call LLM
+                generated_code = self._generate_code(
+                    prompt,
+                    spec_hash,
+                    previous_response_id=previous_response_id,
+                    previous_reasoning_details=previous_reasoning_details,
+                )
+                self._validate_generated_code(generated_code)
+
+                # Compute checkpoint hash
+                chk_hash = compute_checkpoint_hash(spec_hash, prompt_hash, generated_code)
+
+                # Save checkpoint
+                checkpoint_info = self._save_checkpoint(
+                    spec_hash, chk_hash, prompt_hash, generated_code
+                )
+
+                # Attach provider metadata so callers can chain reasoning-aware retries
+                checkpoint_info["response_id"] = getattr(
+                    self.provider, "last_metadata", {}
+                ).response_id
+                checkpoint_info["reasoning_details"] = getattr(
+                    getattr(self.provider, "last_metadata", None), "reasoning_details", None
+                )
+
+                if debug:
+                    checkpoint_info["debug_prompt"] = last_prompt
+                    checkpoint_info["debug_output"] = generated_code
+
+                return checkpoint_info
+
+            except VibesafeValidationError as exc:
+                if attempt < max_retries:
+                    # Prepare feedback for next attempt
+                    current_feedback = f"Generated code was invalid: {exc}"
+
+                    # Update context for chaining if available
+                    if hasattr(self.provider, "last_metadata"):
+                        previous_response_id = getattr(
+                            self.provider.last_metadata, "response_id", previous_response_id
+                        )
+                        previous_reasoning_details = getattr(
+                            self.provider.last_metadata,
+                            "reasoning_details",
+                            previous_reasoning_details,
+                        )
+                    continue
+                raise exc
+
+        # This point should never be reached because successful generation returns
+        # and failures either retry or raise. Keep an explicit guard for type-checkers
+        # and clearer runtime diagnostics.
+        raise VibesafeValidationError(
+            f"Failed to generate code for {self.unit_id} after {max_retries + 1} attempts."
+        )
 
     def _compute_spec_hash(self) -> str:
         """Compute spec hash for this unit."""
@@ -109,11 +171,12 @@ class CodeGenerator:
         )
         provider_model = self.provider_config.model
         dependency_digest = compute_dependency_digest(self.spec["dependencies"])
-        provider_params = {
-            "temperature": self.provider_config.temperature,
+        provider_params: dict[str, str | int | float] = {
             "seed": self.provider_config.seed,
             "timeout": self.provider_config.timeout,
         }
+        if self.provider_config.reasoning_effort:
+            provider_params["reasoning_effort"] = self.provider_config.reasoning_effort
 
         return compute_spec_hash(
             signature=self.spec["signature"],
@@ -187,15 +250,30 @@ class CodeGenerator:
             "unit_meta": self.unit_meta,
             "vibesafe_version": __version__,
             "spec_type": self.spec.get("type"),
+            "module_name": self.unit_meta.get("module", ""),
+            "file_path": inspect.getfile(self.func),
         }
 
         return template.render(**context)
 
-    def _generate_code(self, prompt: str, spec_hash: str) -> str:
+    def _generate_code(
+        self,
+        prompt: str,
+        spec_hash: str,
+        *,
+        previous_response_id: str | None = None,
+        previous_reasoning_details: dict | None = None,
+    ) -> str:
         """Call LLM to generate code."""
         seed = self.provider_config.seed
         try:
-            generated = self.provider.complete(prompt=prompt, seed=seed, spec_hash=spec_hash)
+            generated = self.provider.complete(
+                prompt=prompt,
+                seed=seed,
+                spec_hash=spec_hash,
+                previous_response_id=previous_response_id,
+                reasoning_details=previous_reasoning_details,
+            )
         except Exception as exc:  # pragma: no cover - provider errors are environment-specific
             raise VibesafeProviderError(f"Provider request failed: {exc}") from exc
         return self._clean_generated_code(generated)
@@ -210,23 +288,31 @@ class CodeGenerator:
         Returns:
             Clean Python code
         """
-        # Remove markdown code blocks if present
         lines = code.strip().split("\n")
 
-        # Check if the code is wrapped in markdown code blocks
-        if lines and lines[0].strip().startswith("```"):
-            # Find the start and end of the code block
-            start_idx = 1  # Skip the opening ```python or ```
-            end_idx = len(lines)
+        # Find start of code block
+        start_idx = -1
+        for i, line in enumerate(lines):
+            if line.strip().startswith("```"):
+                start_idx = i
+                break
 
-            # Find the closing ```
-            for i in range(len(lines) - 1, 0, -1):
-                if lines[i].strip() == "```":
+        # If code block found
+        if start_idx != -1:
+            # Find end of code block
+            end_idx = -1
+            for i in range(len(lines) - 1, start_idx, -1):
+                if lines[i].strip().startswith("```"):
                     end_idx = i
                     break
 
-            # Extract just the code between the markers
-            code = "\n".join(lines[start_idx:end_idx])
+            if end_idx != -1:
+                # Extract code between markers
+                # start_idx + 1 to skip the opening ```
+                code = "\n".join(lines[start_idx + 1 : end_idx])
+            else:
+                # Unclosed block? Take everything after start
+                code = "\n".join(lines[start_idx + 1 :])
 
         # Strip trailing whitespace from each line (for linting)
         lines = code.strip().split("\n")
@@ -349,6 +435,12 @@ class CodeGenerator:
         signature_text = self.spec["signature"]
         docstring_text = self.spec["docstring"] or ""
         body_before = self.spec["body_before_handled"] or ""
+        reasoning_line = ""
+        if self.provider_config.reasoning_effort:
+            reasoning_line = (
+                f'reasoning_effort = "{self.provider_config.reasoning_effort}"\n            '
+            )
+
         meta_content = textwrap.dedent(
             f"""\
             # Vibesafe checkpoint metadata
@@ -361,8 +453,7 @@ class CodeGenerator:
             vibesafe_version = "{__version__}"
             provider = "{self.provider_config.kind}:{self.provider_config.model}"
             template = "{template_id}"
-            provider_temperature = {self.provider_config.temperature}
-            provider_seed = {self.provider_config.seed}
+            {reasoning_line}provider_seed = {self.provider_config.seed}
             provider_timeout = {self.provider_config.timeout}
 
             [hash_inputs]
@@ -413,6 +504,9 @@ def generate_for_unit(
     force: bool = False,
     allow_missing_doctest: bool = False,
     feedback: str | None = None,
+    previous_response_id: str | None = None,
+    previous_reasoning_details: dict | None = None,
+    debug: bool = False,
 ) -> dict[str, Any]:
     """
     Generate code for a specific unit.
@@ -435,4 +529,7 @@ def generate_for_unit(
         force=force,
         allow_missing_doctest=allow_missing_doctest,
         feedback=feedback,
+        previous_response_id=previous_response_id,
+        previous_reasoning_details=previous_reasoning_details,
+        debug=debug,
     )

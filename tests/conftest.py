@@ -45,7 +45,6 @@ env = "dev"
 [provider.default]
 kind = "openai-compatible"
 model = "gpt-4o-mini"
-temperature = 0.0
 seed = 42
 base_url = "https://api.openai.com/v1"
 api_key_env = "TEST_API_KEY"
