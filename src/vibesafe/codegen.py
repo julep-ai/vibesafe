@@ -155,6 +155,13 @@ class CodeGenerator:
                     continue
                 raise exc
 
+        # This point should never be reached because successful generation returns
+        # and failures either retry or raise. Keep an explicit guard for type-checkers
+        # and clearer runtime diagnostics.
+        raise VibesafeValidationError(
+            f"Failed to generate code for {self.unit_id} after {max_retries + 1} attempts."
+        )
+
     def _compute_spec_hash(self) -> str:
         """Compute spec hash for this unit."""
         template_id = resolve_template_id(
