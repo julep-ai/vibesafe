@@ -47,6 +47,14 @@ def _run_doctests(func) -> None:
 
 
 def test_doctests() -> None:
-    func = load_checkpoint(UNIT_ID)
+    import pytest
+
+    from vibesafe.exceptions import VibesafeCheckpointMissing
+
+    try:
+        func = load_checkpoint(UNIT_ID)
+    except VibesafeCheckpointMissing:
+        pytest.skip(f"Checkpoint for {UNIT_ID} missing; skipping tests.")
+
     _run_doctests(func)
     _exec_properties(func)

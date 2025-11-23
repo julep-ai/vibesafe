@@ -215,3 +215,4 @@ __generated__/
 # Node tooling
 node_modules/
 docs/node_modules/
+playground/

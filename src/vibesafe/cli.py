@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import cast
@@ -182,7 +183,14 @@ memory_mb = 256
     show_default=True,
     help="Max LLM regeneration attempts per unit when tests/gates fail.",
 )
-def compile(target: str | None, force: bool, workers: int | None, max_iterations: int) -> None:
+@click.option(
+    "--debug",
+    is_flag=True,
+    help="Print rendered prompts and generated code output (requires --workers 1).",
+)
+def compile(
+    target: str | None, force: bool, workers: int | None, max_iterations: int, debug: bool
+) -> None:
     """
     Generate code for vibesafe units.
 
@@ -212,6 +220,9 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
 
     auto_workers = max(((os.cpu_count() or 4) - 2), 1)
     worker_count = min(workers or auto_workers, len(units_to_compile))
+    if debug and worker_count != 1:
+        console.print("[red]--debug requires --workers 1 to keep output ordered.[/red]")
+        sys.exit(1)
 
     console.print(
         f"[bold]Compiling {len(units_to_compile)} unit(s) with {worker_count} worker(s)...[/bold]\n"
@@ -224,10 +235,11 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
     registry_snapshot = registry  # local ref for worker closure
 
     def _compile_unit(
-        unit_id: str, progress: Progress | None, task_id: int | None
-    ) -> tuple[str, dict | None, object | None, list[str]]:
-        """Return (unit_id, checkpoint_info, test_result, errors)."""
+        unit_id: str, progress: Progress | None, task_id: int | None, debug_mode: bool
+    ) -> tuple[str, dict | None, object | None, list[str], float]:
+        """Return (unit_id, checkpoint_info, test_result, errors, duration)."""
         unit_meta = registry_snapshot[unit_id]
+        start = time.perf_counter()
 
         checkpoint_info: dict[str, object] | None = None
         test_result: object | None = None
@@ -248,7 +260,24 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
                     feedback="\n".join(errors) if errors else None,
                     previous_response_id=previous_response_id,
                     previous_reasoning_details=previous_reasoning_details,
+                    debug=debug_mode,
                 )
+                if debug_mode and checkpoint_info is not None:
+                    prompt_txt = checkpoint_info.get("debug_prompt")
+                    output_txt = checkpoint_info.get("debug_output")
+                    if prompt_txt is None or output_txt is None:
+                        console.print(
+                            "[yellow]Debug requested but checkpoint was reused; rerun with --force to regenerate.[/yellow]"
+                        )
+                    else:
+                        console.print(
+                            "[yellow]\n--- Prompt --------------------------------[/yellow]"
+                        )
+                        console.print(prompt_txt)
+                        console.print(
+                            "[yellow]\n--- Output --------------------------------[/yellow]"
+                        )
+                        console.print(output_txt)
                 previous_response_id = (
                     checkpoint_info.get("response_id") if checkpoint_info else None
                 )
@@ -272,7 +301,8 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
                     progress.update(
                         task_id, description=f"[green]{unit_id}[/green] ✓", completed=True
                     )
-                return unit_id, checkpoint_info, test_result, errors
+                duration = time.perf_counter() - start
+                return unit_id, checkpoint_info, test_result, errors, duration
 
             except Exception as exc:  # pragma: no cover - provider/environment failures
                 errors = [str(exc)]
@@ -282,14 +312,16 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
                         progress.update(
                             task_id, description=f"[red]{unit_id}[/red] error", completed=True
                         )
-                    return unit_id, None, None, errors
+                    duration = time.perf_counter() - start
+                    return unit_id, None, None, errors, duration
 
         # Exhausted attempts with errors
         if progress and task_id is not None:
             progress.update(task_id, description=f"[red]{unit_id}[/red] failed", completed=True)
-        return unit_id, checkpoint_info, test_result, errors
+        duration = time.perf_counter() - start
+        return unit_id, checkpoint_info, test_result, errors, duration
 
-    results: list[tuple[str, dict | None, object | None, list[str]]] = []
+    results: list[tuple[str, dict | None, object | None, list[str], float]] = []
 
     use_progress = isinstance(console, Console)
     progress: Progress | None = None
@@ -307,7 +339,7 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
         if progress is None:
             # Fallback without rich progress (e.g., in tests)
             for uid in units_to_compile:
-                results.append(_compile_unit(uid, None, None))
+                results.append(_compile_unit(uid, None, None, debug))
             return
 
         with progress:
@@ -318,13 +350,13 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
 
             if worker_count == 1 or len(units_to_compile) == 1:
                 for uid in units_to_compile:
-                    results.append(_compile_unit(uid, progress, task_ids[uid]))
+                    results.append(_compile_unit(uid, progress, task_ids[uid], debug))
                     progress.update(task_ids[uid], completed=True)
                     progress.stop_task(task_ids[uid])
             else:
                 with ThreadPoolExecutor(max_workers=worker_count) as executor:
                     future_map = {
-                        executor.submit(_compile_unit, uid, progress, task_ids[uid]): uid
+                        executor.submit(_compile_unit, uid, progress, task_ids[uid], debug): uid
                         for uid in units_to_compile
                     }
                     for future in as_completed(future_map):
@@ -339,25 +371,26 @@ def compile(target: str | None, force: bool, workers: int | None, max_iterations
     order = {uid: idx for idx, uid in enumerate(units_to_compile)}
     results.sort(key=lambda r: order[r[0]])
 
-    for unit_id, checkpoint_info, test_result, errors in results:
+    for unit_id, checkpoint_info, test_result, errors, duration in results:
         console.print(f"[cyan]→ {unit_id}[/cyan]")
 
         if checkpoint_info is None:
             had_failures = True
             console.print(f"  [red]✗ Error:[/red] {errors[0] if errors else 'unknown error'}")
+            console.print(f"  ⏱ {duration:.2f}s")
             continue
 
         console.print(f"  ✓ Generated checkpoint: {checkpoint_info['spec_hash'][:8]}")
-
-        update_index(
-            unit_id,
-            checkpoint_info["spec_hash"],
-            created=checkpoint_info.get("created_at"),
-        )
-        console.print("  ✓ Updated index")
+        console.print(f"  ⏱ {duration:.2f}s")
 
         if test_result and getattr(test_result, "passed", False):
             console.print(f"  ✓ Tests passed ({getattr(test_result, 'total', '?')} total)")
+            update_index(
+                unit_id,
+                checkpoint_info["spec_hash"],
+                created=checkpoint_info.get("created_at"),
+            )
+            console.print("  ✓ Updated index")
         else:
             had_failures = True
             total = getattr(test_result, "total", "?") if test_result else "?"
@@ -1022,7 +1055,16 @@ def _import_project_modules() -> None:
     }
 
     def _should_skip(path: Path) -> bool:
-        return any(part in ignore_dirnames or part.startswith(".") for part in path.parts)
+        # Use stricter check than startswith(".") to avoid path traversal issues
+        # and accidental skipping of valid paths like "foo.bar".
+        # We only want to skip hidden directories/files (starting with .)
+        # and specific ignored directories.
+        for part in path.parts:
+            if part in ignore_dirnames:
+                return True
+            if part.startswith(".") and part != ".":
+                return True
+        return False
 
     for py_file in cwd.rglob("*.py"):
         if _should_skip(py_file) or "__generated__" in str(py_file):

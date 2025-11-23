@@ -60,6 +60,7 @@ class CodeGenerator:
         feedback: str | None = None,
         previous_response_id: str | None = None,
         previous_reasoning_details: dict | None = None,
+        debug: bool = False,
     ) -> dict[str, Any]:
         """
         Generate implementation for this unit.
@@ -84,37 +85,75 @@ class CodeGenerator:
             # Load existing checkpoint
             return self._load_checkpoint_meta(checkpoint_dir)
 
-        # Render prompt
-        prompt = self._render_prompt()
-        if feedback:
-            prompt = (
-                f"{prompt}\n\n---\nPrevious attempt failed with:\n{feedback}\n"
-                "Please fix the issues above and output only the corrected implementation."
-            )
-        prompt_hash = compute_prompt_hash(prompt)
+        # Render prompt base
+        base_prompt = self._render_prompt()
+        last_prompt: str | None = None
 
-        # Call LLM
-        generated_code = self._generate_code(
-            prompt,
-            spec_hash,
-            previous_response_id=previous_response_id,
-            previous_reasoning_details=previous_reasoning_details,
-        )
-        self._validate_generated_code(generated_code)
+        # Retry loop for validation errors (e.g. SyntaxError)
+        max_retries = 3
+        current_feedback = feedback
 
-        # Compute checkpoint hash
-        chk_hash = compute_checkpoint_hash(spec_hash, prompt_hash, generated_code)
+        for attempt in range(max_retries + 1):
+            # Construct prompt with feedback
+            prompt = base_prompt
+            if current_feedback:
+                prompt = (
+                    f"{base_prompt}\n\n---\nPrevious attempt failed with:\n{current_feedback}\n"
+                    "Please fix the issues above and output only the corrected implementation."
+                )
 
-        # Save checkpoint
-        checkpoint_info = self._save_checkpoint(spec_hash, chk_hash, prompt_hash, generated_code)
+            last_prompt = prompt
+            prompt_hash = compute_prompt_hash(prompt)
 
-        # Attach provider metadata so callers can chain reasoning-aware retries
-        checkpoint_info["response_id"] = getattr(self.provider, "last_metadata", {}).response_id
-        checkpoint_info["reasoning_details"] = getattr(
-            getattr(self.provider, "last_metadata", None), "reasoning_details", None
-        )
+            try:
+                # Call LLM
+                generated_code = self._generate_code(
+                    prompt,
+                    spec_hash,
+                    previous_response_id=previous_response_id,
+                    previous_reasoning_details=previous_reasoning_details,
+                )
+                self._validate_generated_code(generated_code)
 
-        return checkpoint_info
+                # Compute checkpoint hash
+                chk_hash = compute_checkpoint_hash(spec_hash, prompt_hash, generated_code)
+
+                # Save checkpoint
+                checkpoint_info = self._save_checkpoint(
+                    spec_hash, chk_hash, prompt_hash, generated_code
+                )
+
+                # Attach provider metadata so callers can chain reasoning-aware retries
+                checkpoint_info["response_id"] = getattr(
+                    self.provider, "last_metadata", {}
+                ).response_id
+                checkpoint_info["reasoning_details"] = getattr(
+                    getattr(self.provider, "last_metadata", None), "reasoning_details", None
+                )
+
+                if debug:
+                    checkpoint_info["debug_prompt"] = last_prompt
+                    checkpoint_info["debug_output"] = generated_code
+
+                return checkpoint_info
+
+            except VibesafeValidationError as exc:
+                if attempt < max_retries:
+                    # Prepare feedback for next attempt
+                    current_feedback = f"Generated code was invalid: {exc}"
+
+                    # Update context for chaining if available
+                    if hasattr(self.provider, "last_metadata"):
+                        previous_response_id = getattr(
+                            self.provider.last_metadata, "response_id", previous_response_id
+                        )
+                        previous_reasoning_details = getattr(
+                            self.provider.last_metadata,
+                            "reasoning_details",
+                            previous_reasoning_details,
+                        )
+                    continue
+                raise exc
 
     def _compute_spec_hash(self) -> str:
         """Compute spec hash for this unit."""
@@ -204,6 +243,8 @@ class CodeGenerator:
             "unit_meta": self.unit_meta,
             "vibesafe_version": __version__,
             "spec_type": self.spec.get("type"),
+            "module_name": self.unit_meta.get("module", ""),
+            "file_path": inspect.getfile(self.func),
         }
 
         return template.render(**context)
@@ -240,23 +281,31 @@ class CodeGenerator:
         Returns:
             Clean Python code
         """
-        # Remove markdown code blocks if present
         lines = code.strip().split("\n")
 
-        # Check if the code is wrapped in markdown code blocks
-        if lines and lines[0].strip().startswith("```"):
-            # Find the start and end of the code block
-            start_idx = 1  # Skip the opening ```python or ```
-            end_idx = len(lines)
+        # Find start of code block
+        start_idx = -1
+        for i, line in enumerate(lines):
+            if line.strip().startswith("```"):
+                start_idx = i
+                break
 
-            # Find the closing ```
-            for i in range(len(lines) - 1, 0, -1):
-                if lines[i].strip() == "```":
+        # If code block found
+        if start_idx != -1:
+            # Find end of code block
+            end_idx = -1
+            for i in range(len(lines) - 1, start_idx, -1):
+                if lines[i].strip().startswith("```"):
                     end_idx = i
                     break
 
-            # Extract just the code between the markers
-            code = "\n".join(lines[start_idx:end_idx])
+            if end_idx != -1:
+                # Extract code between markers
+                # start_idx + 1 to skip the opening ```
+                code = "\n".join(lines[start_idx + 1 : end_idx])
+            else:
+                # Unclosed block? Take everything after start
+                code = "\n".join(lines[start_idx + 1 :])
 
         # Strip trailing whitespace from each line (for linting)
         lines = code.strip().split("\n")
@@ -450,6 +499,7 @@ def generate_for_unit(
     feedback: str | None = None,
     previous_response_id: str | None = None,
     previous_reasoning_details: dict | None = None,
+    debug: bool = False,
 ) -> dict[str, Any]:
     """
     Generate code for a specific unit.
@@ -474,4 +524,5 @@ def generate_for_unit(
         feedback=feedback,
         previous_response_id=previous_response_id,
         previous_reasoning_details=previous_reasoning_details,
+        debug=debug,
     )

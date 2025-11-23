@@ -20,6 +20,21 @@ You are a Python code generator for the Vibesafe system. Your task is to impleme
 {{ body_before_handled }}
 ```
 
+## File Context
+**Module:** `{{ module_name }}`
+**File:** `{{ file_path }}`
+
+{% if dependencies %}
+## Context
+The following helper functions/variables are available in the scope:
+{% for name, dep in dependencies.items() %}
+### `{{ name }}`
+```python
+{{ dep.source }}
+```
+{% endfor %}
+{% endif %}
+
 ## Requirements
 
 1. **Implement the complete async function** with the exact signature shown above
@@ -42,20 +57,16 @@ Expected: {{ example.want }}
 
 ## Output Format
 
-Provide ONLY the complete Python async function implementation. Do not include:
-- FastAPI route decorators (they're handled by vibesafe)
-- Import statements for the `vibesafe` library
-- Test code
-- Explanations or comments before/after the code
+Provide the output in the following format:
 
-The output should be valid Python async function code that can be directly saved to a file and imported.
+## Reasoning
+Briefly explain your approach, any edge cases you considered, and how you will ensure the doctests pass.
 
-## Example Output Structure
-
+## Implementation
 ```python
 {{ signature }}:
     # Implementation here
     pass
 ```
 
-Now generate the complete implementation:
+Do not include any text after the code block.

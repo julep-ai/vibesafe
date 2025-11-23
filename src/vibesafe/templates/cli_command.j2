@@ -12,7 +12,35 @@ Tests / Examples:
 {{ example.want.rstrip() }}
 {% endfor %}
 
+File Context:
+- Module: {{ module_name }}
+- File: {{ file_path }}
+
+{% if dependencies %}
+Context:
+{% for name, dep in dependencies.items() %}
+### `{{ name }}`
+```python
+{{ dep.source }}
+```
+{% endfor %}
+{% endif %}
+
 Constraints:
 - Preserve the function signature exactly.
 - Include the docstring.
 - Do not add CLI wiring; implement only the function body.
+
+Output Format:
+
+## Reasoning
+Briefly explain your approach.
+
+## Implementation
+```python
+{{ signature }}:
+    # Implementation here
+    pass
+```
+
+Do not include any text after the code block.

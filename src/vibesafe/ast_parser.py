@@ -231,49 +231,97 @@ class SpecExtractor:
 
     def extract_dependencies(self) -> dict[str, dict[str, str]]:
         """
-        Extract static dependencies (names referenced in spec body).
+        Extract static dependencies (names referenced in spec body and signature).
 
         Returns:
             Dictionary mapping name -> source code (if available)
         """
         body_code = self.extract_body_before_handled()
-        if not body_code or self.module is None:
-            return {}
-
-        try:
-            body_tree = ast.parse(textwrap.dedent(body_code))
-        except SyntaxError:
+        # if not body_code or self.module is None:
+        #     return {}
+        if self.module is None:
             return {}
 
         names: set[str] = set()
 
-        class _NameCollector(ast.NodeVisitor):
-            def visit_Name(self, node: ast.Name) -> None:  # type: ignore[override]
-                if isinstance(node.ctx, ast.Load):
-                    names.add(node.id)
-                self.generic_visit(node)
+        # 1. Scan body for name usage
+        if body_code:
+            try:
+                body_tree = ast.parse(textwrap.dedent(body_code))
 
-        _NameCollector().visit(body_tree)
+                class _NameCollector(ast.NodeVisitor):
+                    def visit_Name(self, node: ast.Name) -> None:  # type: ignore[override]
+                        if isinstance(node.ctx, ast.Load):
+                            names.add(node.id)
+                        self.generic_visit(node)
+
+                _NameCollector().visit(body_tree)
+            except SyntaxError:
+                pass
+
+        # 2. Scan signature for types and defaults
+        func_obj = cast(Any, self.func)
+        try:
+            sig = inspect.signature(func_obj)
+            for param in sig.parameters.values():
+                if param.annotation != inspect.Parameter.empty:
+                    self._extract_names_from_annotation(param.annotation, names)
+                if param.default != inspect.Parameter.empty:
+                    self._extract_names_from_value(param.default, names)
+            if sig.return_annotation != inspect.Signature.empty:
+                self._extract_names_from_annotation(sig.return_annotation, names)
+        except (ValueError, TypeError):
+            pass
 
         module_dict = getattr(self.module, "__dict__", {})
         dependencies: dict[str, dict[str, str]] = {}
-        func_obj = cast(Any, self.func)
 
         for name in sorted(names):
             if name == func_obj.__name__:
                 continue
             if name in module_dict:
                 obj = module_dict[name]
-                try:
-                    source = inspect.getsource(obj)
-                    file_path = inspect.getfile(obj)
-                except (OSError, TypeError):
-                    continue
+
+                # Vibesafe-Awareness: Check if it's a registered unit
+                if getattr(obj, "__vibesafe_unit_id__", None):
+                    # It's a vibesafe unit! Extract its interface.
+                    # We use a fresh extractor to get the "real" signature/docstring
+                    # from the underlying function if possible, or just use what we have.
+                    # Note: The wrapper usually hides the real signature unless functools.wraps
+                    # was used perfectly. But our @vibesafe decorator sets __vibesafe_unit_id__
+                    # on the wrapper. We stored the original func in the registry, but
+                    # here we might only have the wrapper.
+                    # Actually, our decorator sets __vibesafe_unit_id__ on the wrapper.
+                    # Let's try to get the real signature from the wrapper (functools.wraps).
+
+                    # We can construct a "Spec Interface" string
+                    try:
+                        # Use SpecExtractor on the dependency to get its clean signature/docstring
+                        # This works because SpecExtractor handles unwrapping/source finding
+                        dep_extractor = SpecExtractor(obj)
+                        source = f"{dep_extractor.extract_signature()}\n{dep_extractor.extract_docstring()}"
+                        file_path = inspect.getfile(obj)
+                    except Exception:
+                        # Fallback to standard source extraction
+                        try:
+                            source = inspect.getsource(obj)
+                            file_path = inspect.getfile(obj)
+                        except (OSError, TypeError):
+                            continue
+                else:
+                    # Standard object
+                    try:
+                        source = inspect.getsource(obj)
+                        file_path = inspect.getfile(obj)
+                    except (OSError, TypeError):
+                        continue
+
                 normalized_source = textwrap.dedent(source).strip()
                 file_hash = ""
                 try:
-                    with open(file_path, "rb") as fh:
-                        file_hash = hashlib.sha256(fh.read()).hexdigest()
+                    if file_path:
+                        with open(file_path, "rb") as fh:
+                            file_hash = hashlib.sha256(fh.read()).hexdigest()
                 except Exception:
                     file_hash = ""
 
@@ -284,6 +332,38 @@ class SpecExtractor:
                 }
 
         return dependencies
+
+    def _extract_names_from_annotation(self, annotation: Any, names: set[str]) -> None:
+        """Helper to extract names from type annotations."""
+        if isinstance(annotation, str):
+            # Forward reference string - simple heuristic
+            # We just grab the first word if it looks like a name
+            # This is imperfect but covers common cases like "List[str]" -> "List"
+            # Better: parse it as AST if possible
+            try:
+                tree = ast.parse(annotation)
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Name):
+                        names.add(node.id)
+            except SyntaxError:
+                pass
+            return
+
+        if hasattr(annotation, "__name__"):
+            names.add(annotation.__name__)
+
+        # Handle generics like List[int] -> List, int
+        if hasattr(annotation, "__origin__"):
+            self._extract_names_from_annotation(annotation.__origin__, names)
+        if hasattr(annotation, "__args__"):
+            for arg in annotation.__args__:
+                self._extract_names_from_annotation(arg, names)
+
+    def _extract_names_from_value(self, value: Any, names: set[str]) -> None:
+        """Helper to extract names from default values."""
+        # If the value is a class or function, add its name
+        if inspect.isclass(value) or inspect.isfunction(value):
+            names.add(value.__name__)
 
     # --- Inference helpers -------------------------------------------------
 
