@@ -60,7 +60,7 @@ Here's vibesafe in action—no configuration, just code:
 ```python
 >>> import vibesafe
 >>> from vibesafe import VibeCoded
->>> @vibesafe.vibesafe
+>>> @vibesafe
 ... def cowsay(msg: str) -> str:
 ...     """
 ...     >>> cowsay("moo")
@@ -85,6 +85,7 @@ That's it. The decorator saw your function name, inferred the intent from "cowsa
 - **Python 3.12+** (3.13 supported, 3.11 not tested)
 - **uv** (recommended) or pip
 - **OpenAI-compatible API key** (OpenAI, Anthropic with proxy, local LLM server)
+- **Claude Code** (optional, for enhanced development experience)
 
 ### Installation
 
@@ -148,6 +149,20 @@ def greet(name: str) -> str:
     """
     raise VibeCoded()
 ```
+
+**Optional: Claude Code Integration**
+
+If you use Claude Code, install the vibesafe plugin for enhanced development:
+
+```bash
+# In your Claude Code settings, add:
+# plugin: /path/to/vibesafe/.claude-plugin
+```
+
+This gives you:
+- `/vibe` commands directly in Claude Code
+- Automatic vibesafe operations when reviewing code
+- MCP server integration for seamless workflow
 
 **3. Generate + test:**
 
@@ -723,6 +738,9 @@ These examples serve three purposes:
 | Jinja2 prompt templates | ✅ | Customizable via `vibesafe.toml` |
 | LLM response caching | ✅ | Keyed by spec hash, speeds up iteration |
 | Subprocess sandbox | ✅ | Optional isolation for test runs |
+| **Claude Code Plugin** | ✅ | Full integration with Claude Code |
+| **MCP Server** | ✅ | Model Context Protocol server |
+| **GitHub Actions** | ✅ | Automated Claude Code reviews |
 
 **Current coverage:** 150+ checkpointed functions across 3 internal projects, 95% test coverage for vibesafe core.
 
@@ -779,8 +797,14 @@ ruff check src/ tests/ examples/
 ruff format src/ tests/ examples/
 ```
 
-**Claude-powered CI:**
-This repo uses [Claude Code](https://claude.com/claude-code) for automated PR reviews and test failure analysis. See [`.github/CLAUDE_ACTIONS.md`](.github/CLAUDE_ACTIONS.md) for setup.
+**Claude Code Integration:**
+This repo includes a full Claude Code plugin with:
+- MCP server for seamless vibesafe operations
+- Slash commands (`/vibe`, `/vibe-init`, `/vibe-mode`, `/vibe-status`)
+- Automated PR reviews and test failure analysis
+- Skills for AI-assisted development workflows
+
+See [`.claude-plugin/`](.claude-plugin/) for plugin configuration and [`.github/workflows/`](.github/workflows/) for CI automation.
 
 ---
 

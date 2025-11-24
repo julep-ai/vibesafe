@@ -22,31 +22,30 @@
 
 The following backlog captures the remaining "Phase 2" items from SPEC Appendix A, plus new items for the v0.2 migration.
 
-1. **Interactive REPL enhancements**
+### ✅ Completed (v0.2)
+1. **MCP server** - Full Model Context Protocol server implementation
+2. **Claude Code Plugin** - Complete integration with slash commands and skills
+3. **GitHub Actions** - Automated Claude Code review workflows
+4. **Import system overhaul** - Removed `__generated__` shims, direct imports only
+5. **API stabilization** - v0.2 API with VibeCoded exception and simplified decorators
+6. **Documentation updates** - Migration guide and updated examples
+
+### 🚧 In Progress
+7. **Interactive REPL enhancements**
     - Add `tighten`, `save`, `split`, `rollback`, and drift diff commands to the REPL.
-2. **Advanced dependency tracer**
+8. **Advanced dependency tracer**
     - Hybrid static/dynamic tracing with runtime sampling for dependency digests.
-3. **LLM provider matrix**
+9. **LLM provider matrix**
     - Support additional providers (Anthropic, local inference, etc.) beyond the OpenAI-compatible backend.
-4. **CLI surface**
+10. **CLI surface**
     - `vibe diff --target unit` with prompt/code diff, `vibe status` dashboard, `vibe check` with optional HTML report.
-5. **MCP expansion**
+11. **MCP expansion**
     - Promote MCP server from read-only to full invocation/compile control.
-6. **Prompts & templating**
+12. **Prompts & templating**
     - Template registry with overrides, prompt diff tooling.
-7. **Dependency freezing**
+13. **Dependency freezing**
     - Richer metadata and automation for `vibe save --freeze-http-deps` with artifact bundling.
-8. **Docs & tooling**
+14. **Docs & tooling**
     - Developer guide on shipping checkpoints, offline workflows, and multi-env setups.
-
-### Import System Overhaul (v0.2)
-9. **Import system overhaul** - Document best practices for importing generated code post-shim-deprecation
-10. **Migration guide** - v0.1 → v0.2 breaking changes (shims removed, new import patterns)
-11. **Deprecation warnings** - Add warnings to old docs still referencing `__generated__`
-12. **Example updates** - Update all examples to use current import patterns
-13. **Troubleshooting guide** - Create guide for users upgrading from v0.1
-
-### API Stabilization (v0.2)
-14. **API stabilization** - Core v0.2 API with VibeCoded exception, simplified decorators, and direct imports is now stable
 
 Update this file when new milestones are added or completed.

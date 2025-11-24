@@ -1,3 +1,4 @@
 [submodule "docs"]
 	path = docs
-	url = git@github.com:julep-ai/vibesafe-docs.git
+	url = https://github.com/julep-ai/vibesafe-docs.git
+	pushurl = git@github.com:julep-ai/vibesafe-docs.git

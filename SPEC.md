@@ -1,8 +1,9 @@
-# Vibesafe — Extended Developer Guide (v0.1)
+# Vibesafe — Extended Developer Guide (v0.2)
 
 > **Tagline:** *Human intent, verified.*
-> **Scope:** Python 3.12+, targets pure/utility functions and FastAPI HTTP endpoints.
+> **Scope:** Python 3.12+, targets pure/utility functions, FastAPI HTTP endpoints, and CLI commands.
 > **Philosophy:** You write small, typed, example-driven specs; Vibesafe generates code, tests it, and checkpoints the result under a cryptographic hash. Dev is fast and iterative; prod is deterministic and safe.
+> **v0.2 Updates:** Simplified API, Claude Code integration, MCP server, and deprecated shim system.
 
 ---
 
@@ -94,32 +95,34 @@ tests/
 
 ```python
 from typing import Any
-from vibesafe import vibesafe, VibeHandled
+from vibesafe import vibesafe, VibeCoded
 
-@vibesafe.func(
-    prompt: str | None = None,          # override template if desired
-    model: str | None = None,           # override per-unit
-    template_id: str | None = None,     # select alt template
+@vibesafe(
+    provider: str = "default",           # provider name from config
+    template: str = "vibesafe/templates/function.j2",  # template path
+    model: str | None = None,            # override per-unit
 )
 def your_func(...) -> ...:
     """Docstring must include at least 1 doctest."""
-    # your pre/post “glue” is allowed
-    yield VibeHandled()  # or: return VibeHandled()
+    # your pre/post "glue" is allowed
+    raise VibeCoded()
 ```
 
 FastAPI endpoint:
 
 ```python
 from fastapi import APIRouter
-from vibesafe import vibesafe, VibeHandled
+from vibesafe import vibesafe, VibeCoded
 
 router = APIRouter()
 
-@vibesafe.http(
+@vibesafe(
+    kind="http",
     method="POST",
     path="/sum",
     tags=["calc"],
-    prompt=None,
+    provider="default",
+    template="vibesafe/templates/http_endpoint.j2",
     model=None,
 )
 async def sum_endpoint(a: int, b: int) -> dict[str, int]:
@@ -130,7 +133,7 @@ async def sum_endpoint(a: int, b: int) -> dict[str, int]:
     >>> anyio.run(lambda: sum_endpoint(2, 3))
     {'sum': 5}
     """
-    return VibeHandled()
+    raise VibeCoded()
 ```
 
 **Rules**
@@ -219,32 +222,28 @@ def resolve_template_id(unit_id: str) -> str:
 
 **Decision:** Chose module-level approach over class-based `VibesafeDecorator` for simplicity and to avoid singleton patterns. The registry is populated at import time when decorators are applied.
 
-### Import Shims (DEPRECATED v0.2)
+### Import System (v0.2)
 
-~~`__generated__/` directory with import shims~~
+**Direct imports only** - The `__generated__/` shim system has been deprecated and removed.
 
-**Status:** Deprecated. Direct runtime loading is now preferred.
-
-**Reason:** Shims added complexity without clear benefit. Runtime loading via decorator or explicit `load_active()` is simpler and more direct.
+**Runtime loading:** The `@vibesafe` decorator handles checkpoint loading transparently when you import the function directly.
 
 **Migration:** Change imports from:
 ```python
-from app.__generated__.math.ops import sum_str  # OLD
+from app.__generated__.math.ops import sum_str  # v0.1
 ```
 to:
 ```python
-from app.math.ops import sum_str  # NEW
+from app.math.ops import sum_str  # v0.2+
 ```
 
 ### CLI Commands
 
 #### `vibesafe scan`
 - Lists all registered units
-- ~~`--write-shims` flag (deprecated v0.2)~~
 - Shows checkpoint status and doctest coverage
 
 #### `vibesafe compile`
-- ~~No longer writes shims automatically~~
 - Generates code and writes checkpoints
 - `--force` flag to override existing checkpoints
 
@@ -486,14 +485,14 @@ Features:
 Use the pre-hole slice for **safe, human-reviewed** logic:
 
 ```python
-@vibesafe.func
+@vibesafe
 def sanitize_and_parse(payload: str) -> dict[str, int]:
     """
     >>> sanitize_and_parse('{"a": 2, "b": 3}')
     {'a': 2, 'b': 3}
     """
     payload = payload.strip()
-    yield VibeHandled()
+    raise VibeCoded()
 ```
 
 This ensures parsing rules are part of the hash.
@@ -510,7 +509,7 @@ class SumIn(BaseModel):
 class SumOut(BaseModel):
     sum: int
 
-@vibesafe.http(method="POST", path="/sum")
+@vibesafe(kind="http", method="POST", path="/sum")
 async def sum_endpoint(inp: SumIn) -> SumOut:
     """
     >>> import anyio
@@ -518,7 +517,7 @@ async def sum_endpoint(inp: SumIn) -> SumOut:
     >>> out.sum
     5
     """
-    return VibeHandled()
+    raise VibeCoded()
 ```
 
 ### 16.3 Regeneration on dev call
@@ -611,19 +610,49 @@ memory_mb = 256
 * `vibe diff --target app.math.ops/sum_str`
 * `VIBESAFE_ENV=prod python -m your_pkg.app`
 
-## 24) FAQ
+## 24) Claude Code Integration
+
+### Plugin Features
+- **MCP Server**: Full vibesafe operations via Model Context Protocol
+- **Slash Commands**: `/vibe`, `/vibe-init`, `/vibe-mode`, `/vibe-status`
+- **Skills**: AI-assisted development workflows
+- **PR Reviews**: Automated code review with vibesafe awareness
+
+### Setup
+```bash
+# Add to Claude Code settings:
+plugin: /path/to/vibesafe/.claude-plugin
+```
+
+### Available Tools
+- `scan` — List all units with metadata
+- `compile` — Generate implementations (supports `target`, `force`)
+- `test` — Run doctests/quality gates
+- `save` — Activate checkpoints
+- `status` — Report version, unit counts, environment
+
+## 25) FAQ
 
 * **Q:** Can I edit generated files?
-  **A:** Prefer not. Edit the spec or prompt and regenerate. In emergencies, edits won’t be preserved across regenerations unless you lock that checkpoint and never rotate it.
+  **A:** Prefer not. Edit the spec or prompt and regenerate. In emergencies, edits won't be preserved across regenerations unless you lock that checkpoint and never rotate it.
 
 * **Q:** Do I have to use Pydantic?
   **A:** No—stdlib types are fine. Pydantic models are great for HTTP schemas.
 
 * **Q:** Can generated code access the network/DB?
-  **A:** Yes (v0.1). If you need isolation, enable sandbox in Phase 2.
+  **A:** Yes (v0.2+). If you need isolation, enable sandbox in config.
 
 * **Q:** How do I pin FastAPI deps?
   **A:** `vibe save --freeze-http-deps` writes `requirements.vibesafe.txt` and records versions in `meta.toml`.
+
+* **Q:** What happened to `__generated__` imports?
+  **A:** Deprecated in v0.2. Use direct imports: `from app.math.ops import sum_str`.
+
+* **Q:** How do I use Claude Code with vibesafe?
+  **A:** Install the plugin from `.claude-plugin/` directory. Provides MCP server, slash commands, and AI-assisted workflows.
+
+* **Q:** What's the difference between `VibeHandled` and `VibeCoded`?
+  **A:** `VibeHandled` was v0.1. `VibeCoded` is v0.2+ and uses `raise` instead of `yield`.
 
 ---
 

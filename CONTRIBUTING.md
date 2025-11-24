@@ -7,13 +7,20 @@ Thanks for helping improve Vibesafe! These quick notes cover the essentials for 
 - Create an isolated environment: `uv venv && source .venv/bin/activate`.
 - Install the project with dev tooling: `uv pip install -e ".[dev]"`.
 - Ensure your environment exports `OPENAI_API_KEY`; the default provider is OpenAI-compatible `gpt-5-mini` (see `vibesafe.toml`).
+- **Optional**: Install [Claude Code](https://claude.com/claude-code) and add vibesafe plugin for enhanced development experience.
 
 ## Workflow Checklist
-- The `vibesafe` command has a short alias `vibe` for convenience. Run `vibesafe scan` (or `vibe scan`) to verify specs register, `vibesafe status` for an overview of active checkpoints, `vibesafe diff --target <unit>` to inspect drift, `vibesafe compile --target <unit>` to regenerate implementations using the configured prompts under `prompts/`, and `vibesafe test` to re-run doctest-backed and lint/type gates.
+- The `vibesafe` command has a short alias `vibe` for convenience. Run `vibesafe scan` (or `vibe scan`) to verify specs register, `vibesafe status` for an overview of active checkpoints, `vibesafe diff --target <unit>` to inspect drift, `vibesafe compile --target <unit>` to regenerate implementations using the configured prompts under `vibesafe/templates/`, and `vibesafe test` to re-run doctest-backed and lint/type gates.
 - Execute `pytest` (or `pytest -m "not slow"` for tight loops) before pushing.
 - Need to freeze dependencies for an HTTP surface? Include `vibesafe save --target <unit> --freeze-http-deps` (or run without `--target` to freeze all) after tests pass; this writes `requirements.vibesafe.txt` and updates checkpoint metadata.
 - Lint and format with `ruff check src tests examples` and `ruff format src tests examples`.
 - Type-check with `mypy src/vibesafe` and `pyright src/vibesafe`.
+
+### Claude Code Integration
+- If using Claude Code, install the vibesafe plugin from `.claude-plugin/` directory
+- Use `/vibe` commands directly in Claude Code for quick operations
+- Leverage MCP server for seamless vibesafe operations
+- Automated PR reviews will check vibesafe-specific patterns and best practices
 
 ## API Patterns (v0.2+)
 
@@ -52,8 +59,15 @@ def process_file(input_path: str, output_path: str) -> None:
     raise VibeCoded()
 ```
 
-## Deprecated Features
-- `--write-shims` flag on `vibesafe scan` is deprecated as of v0.2. Direct imports are now preferred over generated shim files.
+## v0.2 Migration Notes
+- **Breaking**: `VibesafeHandled` → `VibeCoded` (use `raise VibeCoded()`)
+- **Breaking**: `@vibesafe.func` → `@vibesafe`
+- **Breaking**: `@vibesafe.http` → `@vibesafe(kind="http")`
+- **Breaking**: Removed `__generated__/` shim system (use direct imports)
+- **Breaking**: Template paths moved from `prompts/` to `vibesafe/templates/`
+- **Added**: `@vibesafe(kind="cli")` for CLI command generation
+- **Added**: Claude Code plugin with MCP server integration
+- **Added**: GitHub Actions for automated Claude Code reviews
 
 ## Pull Requests
 - Keep commits focused; prefer sentence-case summaries.
